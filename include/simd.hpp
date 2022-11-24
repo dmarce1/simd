@@ -263,6 +263,7 @@ public:
 	}
 	friend simd_i32 max(simd_i32, simd_i32);
 	friend simd_i32 min(simd_i32, simd_i32);
+	friend simd_f32 blend(simd_f32, simd_f32, simd_i32);
 	friend simd_f32;
 	};
 
@@ -442,14 +443,44 @@ public:
 		friend simd_f32 ceil(simd_f32);
 		friend simd_f32 max(simd_f32, simd_f32);
 		friend simd_f32 min(simd_f32, simd_f32);
+		friend simd_f32 blend(simd_f32, simd_f32, simd_i32);
 		friend class simd_i32;
 	};
 
+	simd_f32 log10(simd_f32 x);
 	simd_f32 log2(simd_f32 x);
+	simd_f32 log(simd_f32 x);
 	simd_f32 cos(simd_f32 x);
 	simd_f32 exp(simd_f32 x);
 	simd_f32 erfc(simd_f32 x);
+	simd_f32 pow(simd_f32 y, simd_f32 x);
+	simd_f32 asin(simd_f32 x);
 	void erfcexp(simd_f32, simd_f32*, simd_f32*);
+
+	inline simd_f32 acos(simd_f32 x) {
+		return simd_f32(M_PI_2) - asin(x);
+	}
+
+	inline simd_f32 atan(simd_f32 x) {
+		simd_f32 z;
+		z = sqrt(simd_f32(1.f) + x * x);
+		return asin(x / z);
+	}
+
+	inline simd_f32 blend(simd_f32 a, simd_f32 b, simd_i32 mask) {
+		mask = -mask;
+		a.v = _mm256_blendv_ps(a.v, b.v, ((simd_f32&) mask).v);
+		return a;
+	}
+
+	inline simd_f32 atanh(simd_f32 x) {
+		return simd_f32(0.5) * log((simd_f32(1) + x) / (simd_f32(1) - x));
+	}
+
+
+	inline simd_f32 pow(simd_f32 y, simd_f32 x) {
+		return exp(x * log(y));
+	}
 
 	inline simd_f32 max(simd_f32 a, simd_f32 b) {
 		a.v = _mm256_max_ps(a.v, b.v);
@@ -755,6 +786,7 @@ public:
 				v[i] = std::numeric_limits<int>::signaling_NaN();
 			}
 		}
+		friend simd_f64 blend(simd_f64, simd_f64, simd_i64);
 		friend simd_i64 max(simd_i64, simd_i64);
 		friend simd_i64 min(simd_i64, simd_i64);
 		friend simd_f64;
@@ -808,21 +840,6 @@ public:
 			CHECK_ALIGNMENT(this, 32);
 			v = _mm256_i64gather_pd(ptr, indices.v, sizeof(double));
 			return *this;
-		}
-		inline simd_f64 permute(simd_i64 i) const {
-			CHECK_ALIGNMENT(this, 32);
-			static const simd_i64 shft = {6, 4, 2, 0};
-			i <<= shft;
-			__m128i c = (__m128i&)(i.v);
-			__m128i d = *((__m128i*)(&i.v) + 1);
-			__m64 a = (__m64&)(c);
-			__m64 b = *((__m64*)(&d) + 1);
-			c = _mm_or_si128(c, d);
-			a = _mm_or_si64(a, b);
-			int j = (int&) c;
-			simd_f64 result;
-			result.v = _mm256_permute4x64_pd(v, j);
-			return result;
 		}
 		inline simd_f64& operator+=(const simd_f64& other) {
 			CHECK_ALIGNMENT(this, 32);
@@ -948,14 +965,44 @@ public:
 		friend simd_f64 ceil(simd_f64);
 		friend simd_f64 max(simd_f64, simd_f64);
 		friend simd_f64 min(simd_f64, simd_f64);
+		friend simd_f64 blend(simd_f64, simd_f64, simd_i64);
+		friend simd_f64 asin(simd_f64 x);
 		friend class simd_i64;
 	};
 
+	simd_f64 pow(simd_f64 y, simd_f64 x);
+	simd_f64 log(simd_f64 x);
+	simd_f64 log10(simd_f64 x);
 	simd_f64 log2(simd_f64 x);
 	simd_f64 cos(simd_f64 x);
+	simd_f64 asin(simd_f64 x);
 	simd_f64 exp(simd_f64 x);
 	simd_f64 erfc(simd_f64 x);
 	void erfcexp(simd_f64, simd_f64*, simd_f64*);
+
+	inline simd_f64 pow(simd_f64 y, simd_f64 x) {
+		return exp(x * log(y));
+	}
+
+	inline simd_f64 acos(simd_f64 x) {
+		return simd_f64(M_PI_2) - asin(x);
+	}
+
+	inline simd_f64 atan(simd_f64 x) {
+		simd_f64 z;
+		z = sqrt(simd_f64(1.0) + x * x);
+		return asin(x / z);
+	}
+
+	inline simd_f64 blend(simd_f64 a, simd_f64 b, simd_i64 mask) {
+		mask = -mask;
+		a.v = _mm256_blendv_pd(a.v, b.v, ((simd_f64&) mask).v);
+		return a;
+	}
+
+	inline simd_f64 atanh(simd_f64 x) {
+		return simd_f64(0.5) * log((simd_f64(1) + x) / (simd_f64(1) - x));
+	}
 
 	inline simd_f64 max(simd_f64 a, simd_f64 b) {
 		a.v = _mm256_max_pd(a.v, b.v);

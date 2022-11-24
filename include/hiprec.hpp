@@ -116,6 +116,7 @@ public:
 	friend hiprec_real exp(hiprec_real);
 	friend hiprec_real asin(hiprec_real);
 	friend hiprec_real log(hiprec_real);
+	friend hiprec_real log2(hiprec_real);
 	friend hiprec_real abs(hiprec_real);
 	friend hiprec_real cos(hiprec_real);
 	friend hiprec_real sin(hiprec_real);
@@ -131,6 +132,12 @@ hiprec_real pow(hiprec_real a, hiprec_real b) {
 hiprec_real log(hiprec_real a) {
 	hiprec_real c;
 	mpfr_log(c.q, a.q, MPFR_RNDN);
+	return c;
+}
+
+hiprec_real log2(hiprec_real a) {
+	hiprec_real c;
+	mpfr_log2(c.q, a.q, MPFR_RNDN);
 	return c;
 }
 
