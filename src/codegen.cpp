@@ -20,8 +20,8 @@ std::string print2str(const char* fstr, Args&&...args) {
 	return result;
 }
 
-hiprec_real factorial(int n ) {
-	if( n <= 1 ) {
+hiprec_real factorial(int n) {
+	if (n <= 1) {
 		return hiprec_real(1);
 	} else {
 		return hiprec_real(n) * factorial(n - 1);
@@ -63,16 +63,16 @@ void float_funcs(FILE* fp) {
 				double c1, c2, c3, c4;
 				if (i < N) {
 					int m = i / 2;
-					const auto pi = hiprec_real(4)*atan(hiprec_real(1));
+					const auto pi = hiprec_real(4) * atan(hiprec_real(1));
 					c1 = (i % 2 == 1) ? (double) (hiprec_real(2) / sqrt(pi) * hiprec_real(m % 2 == 0 ? 1 : -1) / factorial(m) / hiprec_real(2 * m + 1)) : 0.0;
 					c2 = co[0][i];
 					c3 = co[1][i];
 					c4 = co[2][i];
 					const double factor = (double) (pow(hiprec_real(2) * hiprec_real(M) / xmax, hiprec_real(i)));
 //					c1 *= factor;// * ((1<<(i)) * 0.5);
-				//	c1 *= 2.0;
-					printf( "%e\n", c1);
-					c2*= factor;
+					//	c1 *= 2.0;
+					printf("%e\n", c1);
+					c2 *= factor;
 					c3 *= factor;
 					c4 *= factor;
 				} else {
@@ -92,11 +92,10 @@ void float_funcs(FILE* fp) {
 		}
 		auto sqrtpi = sqrt(hiprec_real(4) * atan(hiprec_real(1)));
 		fprintf(fp, "\t};\n");
-		fprintf(fp, "\tsimd_f32 y, s, z, x2, x0;\n");
+		fprintf(fp, "\tsimd_f32 y, s, z, x2;\n");
 		fprintf(fp, "\tsimd_i32 i0, i1, l;\n");
 		fprintf(fp, "\ts = copysign(simd_f32(1), x);\n");
 		fprintf(fp, "\tx = abs(x);\n");
-		fprintf(fp, "\tx0 = x;\n");
 		fprintf(fp, "\tx2 = x * x;\n");
 		fprintf(fp, "\tl = x < simd_f32(0.15);\n");
 		fprintf(fp, "\tz = simd_f32(1) - simd_f32(l);\n");
@@ -448,6 +447,86 @@ void float_funcs(FILE* fp) {
 
 }
 void double_funcs(FILE* fp) {
+	{
+		constexpr int M = 6;
+		static std::vector<double> co[M];
+		const hiprec_real xmax(6.5);
+		static constexpr double toler = std::numeric_limits<double>::epsilon() * 0.5;
+		int N = 0;
+		for (int i = 0; i < M; i++) {
+			hiprec_real a = hiprec_real(i) * xmax / hiprec_real(M);
+			hiprec_real b = hiprec_real(i + 1) * xmax / hiprec_real(M);
+			std::function<hiprec_real(hiprec_real)> func = [a,b](hiprec_real x) {
+				const auto sum = a + b;
+				const auto dif = b - a;
+				const auto half = hiprec_real(0.5);
+				return erf(half*(sum + dif * x));
+			};
+			co[i] = ChebyCoeffs(func, toler, 0);
+			N = std::max(N, (int) co[i].size());
+		}
+		for (int n = 0; n < N; n++) {
+			for (int m = 0; m < M; m++) {
+				if (co[m].size() < n + 1) {
+					co[m].push_back(0.0);
+				}
+			}
+		}
+		fprintf(fp, "\n");
+		fprintf(fp, "simd_f64 erf(simd_f64 x) {\n");
+		fprintf(fp, "\tstatic const double co[][%i] = {\n", M + 1);
+		for (int n = 0; n < N; n ++) {
+			fprintf(fp, "\t\t{");
+			double c1, c2, c3, c4, c5, c6, c7;
+			if (n < N) {
+				int m = n / 2;
+				const auto pi = hiprec_real(4) * atan(hiprec_real(1));
+				c1 = (n % 2 == 1) ? (double) (hiprec_real(2) / sqrt(pi) * hiprec_real(m % 2 == 0 ? 1 : -1) / factorial(m) / hiprec_real(2 * m + 1)) : 0.0;
+				c2 = co[0][n];
+				c3 = co[1][n];
+				c4 = co[2][n];
+				c5 = co[3][n];
+				c6 = co[4][n];
+				c7 = co[5][n];
+				const double factor = (double) (pow(hiprec_real(2) * hiprec_real(M) / xmax, hiprec_real(n)));
+				c2 *= factor;
+				c3 *= factor;
+				c4 *= factor;
+				c5 *= factor;
+				c6 *= factor;
+				c7 *= factor;
+			} else {
+				c7 = c5 = c6 = c1 = c3 = c4 = c2 = 99.0;
+			}
+			fprintf(fp, "%24.17e, %24.17e, %24.17e, %24.17e, %24.17e, %24.17e, %24.17e", c1, c2, c3, c4, c5, c6, c7);
+			fprintf(fp, "}");
+			if (n + 1 < N) {
+				fprintf(fp, ",");
+			}
+			fprintf(fp, "\n");
+		}
+		auto sqrtpi = sqrt(hiprec_real(4) * atan(hiprec_real(1)));
+		fprintf(fp, "\t};\n");
+		fprintf(fp, "\tsimd_f64 y, s, z, x2, c;\n");
+		fprintf(fp, "\tsimd_i64 i0, i1, l;\n");
+		fprintf(fp, "\ts = copysign(simd_f64(1), x);\n");
+		fprintf(fp, "\tx = abs(x);\n");
+		fprintf(fp, "\tx2 = x * x;\n");
+		fprintf(fp, "\tl = x < simd_f64(0.4);\n");
+		fprintf(fp, "\tz = simd_f64(1) - simd_f64(l);\n");
+		fprintf(fp, "\tx = min(x, simd_f64(%.17e));\n", (double) xmax - 0.00001);
+		fprintf(fp, "\ti0 = x * simd_f64(%.17e);\n", (double) (hiprec_real(M) / xmax));
+		fprintf(fp, "\ti0 += simd_i64(1);\n");
+		fprintf(fp, "\ti0 -= l;\n");
+		fprintf(fp, "\tx -= z * simd_f64(%.17e) * i0;\n", (double) (xmax / hiprec_real(M)));
+		fprintf(fp, "\tx -= z * simd_f64(%.17e);\n", (double) (xmax * hiprec_real(0.5) / hiprec_real(M)) - (double) (xmax / hiprec_real(M)));
+		fprintf(fp, "\ty = c.gather(co[%i], i0);\n", (N - 1));
+		for (int n = N - 2; n >= 0; n--) {
+			fprintf(fp, "\ty = fma(y, x, c.gather(co[%i], i0));\n", n );
+		}
+		fprintf(fp, "\treturn s * y;\n");
+		fprintf(fp, "}\n");
+	}
 	{
 		constexpr int M = 4;
 		static std::vector<double> co[M];

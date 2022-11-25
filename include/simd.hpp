@@ -1024,15 +1024,16 @@ public:
 };
 
 simd_f64 pow(simd_f64 y, simd_f64 x);
-simd_f64 log(simd_f64 x);
-simd_f64 log10(simd_f64 x);
-simd_f64 tgamma(simd_f64 x);
-simd_f64 log2(simd_f64 x);
-simd_f64 cos(simd_f64 x);
-simd_f64 asin(simd_f64 x);
-simd_f64 exp(simd_f64 x);
-simd_f64 erfc(simd_f64 x);
-simd_f64 erf(simd_f64 x);
+simd_f64 log(simd_f64);
+simd_f64 log10(simd_f64);
+simd_f64 tgamma(simd_f64);
+simd_f64 log2(simd_f64);
+simd_f64 cos(simd_f64);
+simd_f64 asin(simd_f64);
+simd_f64 exp(simd_f64);
+simd_f64 erfc(simd_f64);
+simd_f64 erf(simd_f64);
+simd_f64 erf(simd_f64);
 void erfcexp(simd_f64, simd_f64*, simd_f64*);
 
 inline simd_f64 pow(simd_f64 y, simd_f64 x) {
