@@ -448,15 +448,16 @@ public:
 	friend class simd_i32;
 };
 
-simd_f32 log10(simd_f32 x);
-simd_f32 tgamma(simd_f32 x);
-simd_f32 log2(simd_f32 x);
-simd_f32 log(simd_f32 x);
-simd_f32 cos(simd_f32 x);
-simd_f32 exp(simd_f32 x);
-simd_f32 erfc(simd_f32 x);
+simd_f32 log10(simd_f32);
+simd_f32 tgamma(simd_f32);
+simd_f32 log2(simd_f32);
+simd_f32 log(simd_f32);
+simd_f32 cos(simd_f32);
+simd_f32 exp(simd_f32);
+simd_f32 erfc(simd_f32);
+simd_f32 erf(simd_f32);
 simd_f32 pow(simd_f32 y, simd_f32 x);
-simd_f32 asin(simd_f32 x);
+simd_f32 asin(simd_f32);
 void erfcexp(simd_f32, simd_f32*, simd_f32*);
 
 inline simd_f32 acos(simd_f32 x) {
@@ -1031,6 +1032,7 @@ simd_f64 cos(simd_f64 x);
 simd_f64 asin(simd_f64 x);
 simd_f64 exp(simd_f64 x);
 simd_f64 erfc(simd_f64 x);
+simd_f64 erf(simd_f64 x);
 void erfcexp(simd_f64, simd_f64*, simd_f64*);
 
 inline simd_f64 pow(simd_f64 y, simd_f64 x) {

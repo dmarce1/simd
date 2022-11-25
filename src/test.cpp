@@ -115,7 +115,7 @@ test_result_t test_function(const F1& ref, const F2& test, T a, T b, bool relerr
 				this_err /= fabs((double) a);
 			}
 			err += this_err;
-	//		printf( "%e %e %e\n", xref[i + j], a, b);
+			//		printf( "%e %e %e\n", xref[i + j], a, b);
 			max_err = std::max((double) max_err, (double) this_err);
 		}
 	}
@@ -233,54 +233,50 @@ test_result_t test_function(const F1& ref, const F2& test, T a0, T b0, T a1, T b
 	printf("%6s %12e %12e %12e\n", #name, res.speed, res.avg_err, res.max_err); \
 }
 
-double gamma_x(double prec) {
-	double x = 1.0;
-	double err;
-	do {
-		double f = (1 + x) * exp(-x) - prec;
-		double dfdx = -x * exp(-x);
-		x -= f / dfdx;
-		err = fabs(f);
-	} while (err > 1e-21);
-	return x;
-}
-
-double factorial(int i) {
-	if (i < 2) {
-		return 1.0;
-	} else {
-		return i * factorial(i - 1);
+double erf_test(double x) {
+	static constexpr double toler = std::numeric_limits<float>::epsilon() * 0.5;
+	static constexpr int M = 4;
+	static int N;
+	static std::vector<double> coeffs[M];
+	static const hiprec_real xmax(26);
+	static std::once_flag flag;
+	std::call_once(flag, []() {
+		for( int m = 0; m < M; m++) {
+			const hiprec_real a = hiprec_real(m) * xmax / hiprec_real(M);
+			const hiprec_real b = hiprec_real(m + 1) * xmax / hiprec_real(M);
+			std::function<hiprec_real(hiprec_real)> func = [a, b](hiprec_real x) {
+				const hiprec_real half = hiprec_real(0.5);
+				const hiprec_real z = half*(a + b + x * (b - a));
+				return erfc(z);
+			};
+			coeffs[m] = ChebyCoeffs(func, toler);
+			N = std::max((int) coeffs[m].size(), N);
+			printf( "N = %i\n", N);
+		}
+	});
+	for (int m = 0; m < M; m++) {
+		coeffs[m].resize(N, 0.0);
 	}
-}
-
-double gamma(double z) {
-	const double toler = std::numeric_limits<float>::epsilon() * 0.5;
-	double x = gamma_x(toler);
-	double factor = 1.0 / z;
-	double y = 0.0;
-	int N;
-	for (int n = 0; pow(x, n) / factorial(n) > toler; n++) {
-		N = n;
+	const int m = x / xmax * M;
+	x -= (m + 0.5) * xmax / M;
+	x *= 2.0 * M / xmax;
+	//printf( "%i %e %i\n", m, x, N);
+	double y = coeffs[m][N - 1];
+	for (int n = N - 2; n >= 0; n--) {
+		y = fma(y, x, coeffs[m][n]);
 	}
-	N++;
-	printf("N = %i\n", N);
-	for (int n = 0; n < N; n++) {
-		y += factor;
-		factor /= (z + n + 1);
-		factor *= x;
-	}
-	return pow(x, z) * exp(-x) * y;
+	return y;
 }
 
 int main() {
 	using namespace simd;
-
-	for (double r = -5; r < 5; r += .01) {
-		double a = tgamma(simd_f64(r))[0];
-		double b = tgamma(r);
-	//	printf("%e %e %e %e\n", r, a, b, (a-b)/a);
+	FILE* fp = fopen( "test.txt", "wt");
+	for (double r = 0.0; r < 8.0; r += .01) {
+		double a = erf(simd_f32(r))[0];
+		double b = erf(r);
+		fprintf(fp, "%e %e %e %e\n", r, a, b, (a - b) / a);
 	}
-
+	fclose(fp);
 //	return 0;
 	for (double x = 1.0; x < 2.0; x += 0.01) {
 //		printf("%e %e %e %e\n", x, gamma(x), std::tgamma(x), (gamma(x) -std::tgamma(x))/std::tgamma(x));
@@ -313,6 +309,7 @@ int main() {
 	printf("Testing SIMD Functions\n");
 	printf("\nSingle Precision\n");
 	printf("name   speed        avg err      max err\n");
+	TEST1(float, simd_f32, erf, erff, erf, 0.145, 5, true);
 	TEST1(float, simd_f32, tgamma, tgammaf, tgamma, -.99, -0.01, true);
 	TEST1(float, simd_f32, cosh, coshf, cosh, -10.0, 10.0, true);
 	TEST1(float, simd_f32, sinh, sinhf, sinh, 0.01, 10.0, true);

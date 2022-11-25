@@ -112,6 +112,7 @@ public:
 	}
 	friend hiprec_real atan(hiprec_real);
 	friend hiprec_real erfc(hiprec_real);
+	friend hiprec_real erf(hiprec_real);
 	friend hiprec_real sqrt(hiprec_real);
 	friend hiprec_real exp(hiprec_real);
 	friend hiprec_real asin(hiprec_real);
@@ -175,6 +176,12 @@ hiprec_real gamma(hiprec_real a) {
 hiprec_real asin(hiprec_real a) {
 	hiprec_real b;
 	mpfr_asin(b.q, a.q, MPFR_RNDN);
+	return b;
+}
+
+hiprec_real erf(hiprec_real a) {
+	hiprec_real b;
+	mpfr_erf(b.q, a.q, MPFR_RNDN);
 	return b;
 }
 

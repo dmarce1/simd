@@ -24,6 +24,86 @@ void float_funcs(FILE* fp) {
 	{
 		constexpr int M = 4;
 		static std::vector<double> co[M];
+		const hiprec_real xmax(4);
+		static constexpr double toler = std::numeric_limits<float>::epsilon() * 0.5;
+		int N = 0;
+		for (int i = 0; i < M; i++) {
+			hiprec_real a = hiprec_real(i) * xmax / hiprec_real(M);
+			hiprec_real b = hiprec_real(i + 1) * xmax / hiprec_real(M);
+			std::function<hiprec_real(hiprec_real)> func = [a,b](hiprec_real x) {
+				const auto sum = a + b;
+				const auto dif = b - a;
+				const auto half = hiprec_real(0.5);
+				return erf(half*(sum + dif * x));
+			};
+			co[i] = ChebyCoeffs(func, toler, 0);
+			N = std::max(N, (int) co[i].size());
+		}
+		for (int n = 0; n < N; n++) {
+			for (int m = 0; m < M; m++) {
+				if (co[m].size() < n + 1) {
+					co[m].push_back(0.0);
+				}
+			}
+		}
+		fprintf(fp, "\n");
+		fprintf(fp, "simd_f32 erf(simd_f32 x) {\n");
+		fprintf(fp, "\tstatic const simd_f32 co[] = {\n");
+		for (int n = 0; n < N; n += 2) {
+			fprintf(fp, "\t\t{");
+			for (int i = n; i < n + 2; i++) {
+				double c1, c2, c3, c4;
+				if (i < N) {
+					c1 = co[0][i];
+					c2 = co[1][i];
+					c3 = co[2][i];
+					c4 = co[3][i];
+				} else {
+					c1 = c3 = c4 = c2 = 99.0;
+				}
+				fprintf(fp, "%.17e, %.17e, %.17e, %.17e", c1, c2, c3, c4);
+				if (i != n + 1) {
+					fprintf(fp, ",");
+				}
+				fprintf(fp, " ");
+			}
+			fprintf(fp, "}");
+			if (n + 2 < N) {
+				fprintf(fp, ",");
+			}
+			fprintf(fp, "\n");
+		}
+		auto sqrtpi = sqrt(hiprec_real(4) * atan(hiprec_real(1)));
+		fprintf(fp, "\t};\n");
+		fprintf(fp, "\tsimd_f32 y, s, z, x2, x0;\n");
+		fprintf(fp, "\tsimd_i32 i0, i1, l;\n");
+		fprintf(fp, "\ts = copysign(simd_f32(1), x);\n");
+		fprintf(fp, "\tx = abs(x);\n");
+		fprintf(fp, "\tx0 = x;\n");
+		fprintf(fp, "\tx2 = x * x;\n");
+		fprintf(fp, "\tl = x < simd_f32(0.15);\n");
+		fprintf(fp, "\tx = min(x, simd_f32(%.17e));\n", (double) xmax - 0.00001);
+		fprintf(fp, "\ti0 = x * simd_f32(%.17e);\n", (double) (hiprec_real(M) / xmax));
+		fprintf(fp, "\ti1 = i0 + simd_i32(4);\n");
+		fprintf(fp, "\tx -= simd_f32(%.17e) * i0;\n", (double) (xmax / hiprec_real(M)));
+		fprintf(fp, "\tx -= simd_f32(%.17e);\n", (double) (xmax * hiprec_real(0.5) / hiprec_real(M)));
+		fprintf(fp, "\tx *= simd_f32(%.17e);\n", (double) (hiprec_real(2) * hiprec_real(M) / xmax));
+		fprintf(fp, "\ty = co[%i].permute(i%i);\n", (N - 1) / 2, (N - 1) % 2);
+		fprintf(fp, "\tz = simd_f32(%.17e);\n", (double) (-hiprec_real(1) / (hiprec_real(21) * sqrtpi)));
+		for (int n = N - 2; n >= 0; n--) {
+			fprintf(fp, "\ty = fma(y, x, co[%i].permute(i%i));\n", n / 2, n % 2);
+		}
+		fprintf(fp, "\tz = fma(z, x2, simd_f32(%.17e));\n", (double) (hiprec_real(1) / (hiprec_real(5) * sqrtpi)));
+		fprintf(fp, "\tz = fma(z, x2, simd_f32(%.17e));\n", (double) (-hiprec_real(2) / (hiprec_real(3) * sqrtpi)));
+		fprintf(fp, "\tz = fma(z, x2, simd_f32(%.17e));\n", (double) (hiprec_real(2) / (hiprec_real(1) * sqrtpi)));
+		fprintf(fp, "\tz *= x0;\n");
+		fprintf(fp, "\ty = blend(y, z, l);\n");
+		fprintf(fp, "\treturn s * y;\n");
+		fprintf(fp, "}\n");
+	}
+	{
+		constexpr int M = 4;
+		static std::vector<double> co[M];
 		static constexpr double toler = std::numeric_limits<float>::epsilon() * 0.5;
 		int N = 0;
 		for (int i = 0; i < M; i++) {
@@ -382,7 +462,7 @@ void double_funcs(FILE* fp) {
 		fprintf(fp, "\tsimd_f64 y, z, x0, x1, s, c0;\n");
 		fprintf(fp, "\tsimd_i64 i0, n, c;\n");
 		fprintf(fp, "\tstatic constexpr double co[][4] = {\n");
-		for (int n = 0; n < N; n ++) {
+		for (int n = 0; n < N; n++) {
 			fprintf(fp, "\t\t{");
 			for (int i = n; i < n + 1; i++) {
 				double c1, c2, c3, c4;
