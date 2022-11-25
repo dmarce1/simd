@@ -4,9 +4,6 @@
 #include "../include/simd.hpp"
 #include "../include/hiprec.hpp"
 #include "../include/polynomial.hpp"
-#include <functional>
-#include <valarray>
-#include <complex>
 
 #define SYSTEM(...) if( system(__VA_ARGS__) != 0 ) {printf( "SYSTEM error %s %i\n", __FILE__, __LINE__); abort(); }
 
@@ -22,95 +19,176 @@ std::string print2str(const char* fstr, Args&&...args) {
 	free(str);
 	return result;
 }
-void fft(std::valarray<std::complex<hiprec_real>>& x) {
-	const size_t N = x.size();
-	if (N <= 1)
-		return;
-	std::valarray<std::complex<hiprec_real>> even = x[std::slice(0, N / 2, 2)];
-	std::valarray<std::complex<hiprec_real>> odd = x[std::slice(1, N / 2, 2)];
-	fft(even);
-	fft(odd);
-	for (size_t k = 0; k < N / 2; ++k) {
-		static const auto one = hiprec_real(1);
-		static const auto twopi = hiprec_real(8) * atan(hiprec_real(1));
-		std::complex<hiprec_real> t = std::polar(one, -twopi * hiprec_real((int) k) / hiprec_real((int) N)) * odd[k];
-		x[k] = even[k] + t;
-		x[k + N / 2] = even[k] - t;
-	}
-}
-
-void dct(std::valarray<hiprec_real>& x) {
-	const auto zero = hiprec_real(0);
-	std::valarray<std::complex<hiprec_real>> y;
-	y.resize(x.size() * 4);
-	for (int n = 0; n < 4 * x.size(); n++) {
-		std::complex<hiprec_real> z;
-		if (n % 2 == 0) {
-			z = std::complex<hiprec_real>(zero, zero);
-		} else if (n < 2 * x.size()) {
-			z.real(x[n / 2]);
-			z.imag(zero);
-		} else {
-			z.real(x[2 * x.size() - n / 2 - 1]);
-			z.imag(zero);
-		}
-		y[n] = z;
-	}
-	fft(y);
-	for (int n = 0; n < x.size(); n++) {
-		x[n] = y[n].real() * (hiprec_real(2) - hiprec_real((int) (n == 0))) / hiprec_real(2 * (int) x.size());
-	}
-}
-
-std::vector<double> ChebyCoeffs(std::function<hiprec_real(hiprec_real)> func, hiprec_real (toler)) {
-	static const hiprec_real one(1);
-	static const hiprec_real pi(hiprec_real(4) * atan(hiprec_real(1)));
-	hiprec_real last, next;
-	next = hiprec_real(99);
-	int M = 2;
-	int N;
-	std::valarray<hiprec_real> X;
-	hiprec_real eps;
-	do {
-		X.resize(M);
-		last = next;
-		for (int m = 0; m < M; m++) {
-			X[m] = func(cos(pi * (hiprec_real(m) + hiprec_real(0.5)) / hiprec_real(M)));
-		}
-		dct(X);
-		int n = 0;
-		eps = toler;
-		while (abs(X[n]) > eps && n < M - 1) {
-			n++;
-			if (n > 0) {
-				eps /= hiprec_real(2);
-			}
-		}
-		next = X[n];
-		M *= 2;
-		N = n;
-	} while (abs(next - last) / abs(last) > eps);
-	auto tn = Tns(N + 1);
-	polynomial c0(N + 1, hiprec_real(0));
-	for (int n = 0; n < N; n++) {
-		c0 = poly_add(c0, poly_mul(poly_term(0, X[n]), tn[n]));
-	}
-	std::vector<double> coeff(N);
-	for (int n = 0; n < N; n++) {
-		coeff[n] = (double) c0[n];
-	}
-	return coeff;
-}
 
 void float_funcs(FILE* fp) {
 	{
-		std::function<hiprec_real(hiprec_real)> func = [](hiprec_real x) {
-			static const auto threehalf = hiprec_real(3) / hiprec_real(2);
-			static const auto half = hiprec_real(1) / hiprec_real(2);
-			static const auto log2inv = hiprec_real(1) / log(hiprec_real(2));
-			return log(threehalf + x * half) * log2inv;
+		constexpr int M = 4;
+		static std::vector<double> co[M];
+		static constexpr double toler = std::numeric_limits<float>::epsilon() * 0.5;
+		int N = 0;
+		for (int i = 0; i < M; i++) {
+			hiprec_real a = hiprec_real(i) / hiprec_real(M) + hiprec_real(1);
+			hiprec_real b = hiprec_real(i + 1) / hiprec_real(M) + hiprec_real(1);
+			std::function<hiprec_real(hiprec_real)> func = [a,b](hiprec_real x) {
+				const auto sum = a + b;
+				const auto dif = b - a;
+				const auto half = hiprec_real(0.5);
+				return gamma(half*(sum + dif * x));
+			};
+			co[i] = ChebyCoeffs(func, toler, 0);
+			N = std::max(N, (int) co[i].size());
+		}
+		for (int n = 0; n < N; n++) {
+			for (int m = 0; m < M; m++) {
+				if (co[m].size() < n + 1) {
+					co[m].push_back(0.0);
+				}
+			}
+		}
+		fprintf(fp, "\n");
+		fprintf(fp, "simd_f32 tgamma(simd_f32 x) {\n");
+		fprintf(fp, "\tsimd_f32 y, z, x0, x1, s;\n");
+		fprintf(fp, "\tsimd_i32 i0, i1, n, c;\n");
+		fprintf(fp, "\tstatic const simd_f32 co[] = {\n");
+		for (int n = 0; n < N; n += 2) {
+			fprintf(fp, "\t\t{");
+			for (int i = n; i < n + 2; i++) {
+				double c1, c2, c3, c4;
+				if (i < N) {
+					c1 = co[0][i];
+					c2 = co[1][i];
+					c3 = co[2][i];
+					c4 = co[3][i];
+				} else {
+					c1 = c3 = c4 = c2 = 99.0;
+				}
+				fprintf(fp, "%.17e, %.17e, %.17e, %.17e", c1, c2, c3, c4);
+				if (i != n + 1) {
+					fprintf(fp, ",");
+				}
+				fprintf(fp, " ");
+			}
+			fprintf(fp, "}");
+			if (n + 2 < N) {
+				fprintf(fp, ",");
+			}
+			fprintf(fp, "\n");
+		}
+		fprintf(fp, "\t};\n");
+		double fac = 1.0;
+		fprintf(fp, "\tn = x < simd_f32(0);\n");
+		fprintf(fp, "\tc = (simd_i32(1) - n) * (x < simd_f32(1));\n");
+		fprintf(fp, "\tz = simd_f32(1) - x;\n");
+		fprintf(fp, "\tx = blend(x, z, n);\n");
+		fprintf(fp, "\tx += simd_f32(c);\n");
+		fprintf(fp, "\tz = x;\n");
+		fprintf(fp, "\ts = sin(simd_f32(M_PI) * x);\n");
+		fprintf(fp, "\tx -= floor(x);\n");
+		fprintf(fp, "\ti0 = x * simd_f32(4);\n");
+		fprintf(fp, "\ti1 = i0 + simd_f32(4);\n");
+		fprintf(fp, "\tx1 = (simd_f32(i0) * simd_f32(0.25) + simd_f32(0.125));\n");
+		fprintf(fp, "\tx0 = simd_f32(8) * (x - x1);\n");
+		fprintf(fp, "\ty = co[%i].permute(i%i);\n", (N - 1) / 2, (N - 1) % 2);
+		for (int n = N - 2; n >= 0; n--) {
+			fprintf(fp, "\ty = fma(y, x0, co[%i].permute(i%i));\n", n / 2, n % 2);
+		}
+		fprintf(fp, "\tfor (int i = 0; i < 33; i++) {\n");
+		fprintf(fp, "\t\tz = max(z - simd_f32(1), simd_f32(1));\n");
+		fprintf(fp, "\t\ty *= z;\n");
+		fprintf(fp, "\t}\n");
+		fprintf(fp, "\ty = blend(y, y / x, c);\n");
+		fprintf(fp, "\ty = blend(y, simd_f32(M_PI) / (s * y), n);\n");
+		fprintf(fp, "\treturn y;\n");
+		fprintf(fp, "}\n");
+	}
+
+	{
+		static std::vector<double> co1;
+		static std::vector<double> co2;
+		static const hiprec_real z0(0.5);
+		static constexpr double toler = std::numeric_limits<float>::epsilon() * 0.5;
+		auto func1 = [](hiprec_real x) {
+			return asin((hiprec_real(1) + x) * z0 / hiprec_real(2));
 		};
-		auto coeff = ChebyCoeffs(func, std::numeric_limits<float>::epsilon() * 0.5);
+		auto func3 = [](hiprec_real y) {
+			const auto x = hiprec_real(1) - y * y;
+			const auto a = asin(x);
+			static const auto b = hiprec_real(2) * atan(hiprec_real(1));
+			const auto c = sqrt(hiprec_real(1) - x);
+			return (b - a)/c;
+		};
+		auto func2 = [func3](hiprec_real x) {
+			const static auto z1 = sqrt(hiprec_real(1) - z0);
+			return func3((z1 + x * hiprec_real(z1)) / hiprec_real(2));
+		};
+		co1 = ChebyCoeffs(func1, toler, 0);
+		co2 = ChebyCoeffs(func2, toler, 0);
+		int N = std::max(co1.size(), co2.size());
+		for (int n = 0; n < N; n++) {
+			if (co1.size() < n + 1) {
+				co1.push_back(0.0);
+			}
+			if (co2.size() < n + 1) {
+				co2.push_back(0.0);
+			}
+		}
+		fprintf(fp, "\n");
+		fprintf(fp, "simd_f32 asin(simd_f32 x) {\n");
+		fprintf(fp, "\tsimd_f32 y, s, z, x0, x1;\n");
+		fprintf(fp, "\tsimd_i32 i0, i1, i2, i3;\n");
+		fprintf(fp, "\tstatic const simd_f32 co[] = {\n");
+		for (int n = 0; n < N; n += 4) {
+			fprintf(fp, "\t\t{");
+			for (int i = n; i < n + 4; i++) {
+				double c1, c2;
+				if (i < N) {
+					c1 = co1[i];
+					c2 = co2[i];
+				} else {
+					c1 = 99.0;
+					c2 = 99.0;
+				}
+				fprintf(fp, "%.17e, %.17e", c1, c2);
+				if (i != n + 3) {
+					fprintf(fp, ",");
+				}
+				fprintf(fp, " ");
+			}
+			fprintf(fp, "}");
+			if (n + 4 < N) {
+				fprintf(fp, ",");
+			}
+			fprintf(fp, "\n");
+		}
+		fprintf(fp, "\t};\n");
+		fprintf(fp, "\ts = copysign(simd_f32(1), x);\n");
+		fprintf(fp, "\tx = abs(x);\n");
+		fprintf(fp, "\ti0 = x > simd_f32(%.17e);\n", (double) z0);
+		fprintf(fp, "\tz = sqrt(simd_f32(1) - x);\n");
+		fprintf(fp, "\tx0 = simd_f32(%.17e) * x - simd_f32(1);\n", (double) (hiprec_real(2) / z0));
+		fprintf(fp, "\tx1 = simd_f32(%.17e) * z - simd_f32(1);\n", (double) (hiprec_real(2) / sqrt(hiprec_real(1) - z0)));
+		fprintf(fp, "\tx = blend(x0, x1, i0);\n");
+		fprintf(fp, "\ti1 = i0 + simd_i32(2);\n");
+		fprintf(fp, "\ti2 = i0 + simd_i32(4);\n");
+		fprintf(fp, "\ti3 = i0 + simd_i32(6);\n");
+		fprintf(fp, "\ty = co[%i].permute(i%i);\n", (N - 1) / 4, (N - 1) % 4);
+		for (int n = N - 2; n >= 0; n--) {
+			fprintf(fp, "\ty = fma(y, x, co[%i].permute(i%i));\n", n / 4, n % 4);
+		}
+		fprintf(fp, "\tz = simd_f32(%.17e) - y * z;\n", (double) (hiprec_real(2) * atan(hiprec_real(1))));
+		fprintf(fp, "\ty = blend(y, z, i0);\n");
+		fprintf(fp, "\treturn s * y;\n");
+		fprintf(fp, "}\n");
+	}
+
+	{
+		std::function<hiprec_real(hiprec_real)> func = [](hiprec_real x) {
+			static const auto c0 = hiprec_real(3) / (hiprec_real(2) * sqrt(hiprec_real(2)));
+			static const auto c1 = hiprec_real(1) / (hiprec_real(2) * sqrt(hiprec_real(2)));
+			static const auto log2inv = hiprec_real(1) / log(hiprec_real(2));
+			return log(c0 + x * c1) * log2inv;
+		};
+		auto coeff = ChebyCoeffs(func, std::numeric_limits<float>::epsilon() * double(1 << 10));
 		fprintf(fp, "\n");
 		fprintf(fp, "simd_f32 log2(simd_f32 x) {\n");
 		fprintf(fp, "\tsimd_f32 y, z;\n");
@@ -127,12 +205,22 @@ void float_funcs(FILE* fp) {
 		fprintf(fp, "\tx -= simd_f32(3);\n");
 		int N = coeff.size() - 1;
 		fprintf(fp, "\ty = simd_f32(%.17e);\n", coeff[N]);
-		for( int n = N - 1; n >= 0; n--){
+		for (int n = N - 1; n >= 0; n--) {
 			fprintf(fp, "\ty = fma(y, x, simd_f32(%.17e));\n", coeff[n]);
 		}
 		fprintf(fp, "\ty += z;\n");
+		fprintf(fp, "\ty += simd_f32(0.5);\n");
 		fprintf(fp, "\treturn y;\n");
 		fprintf(fp, "}\n");
+		fprintf(fp, "\n");
+		fprintf(fp, "simd_f32 log(simd_f32 x) {\n");
+		fprintf(fp, "\treturn log2(x) * simd_f32(%.17e);\n", (double) hiprec_real(1) / log2(exp(hiprec_real(1))));
+		fprintf(fp, "}\n");
+		fprintf(fp, "\n");
+		fprintf(fp, "simd_f32 log10(simd_f32 x) {\n");
+		fprintf(fp, "\treturn log2(x) * simd_f32(%.17e);\n", (double) hiprec_real(1) / log2(hiprec_real(10)));
+		fprintf(fp, "}\n");
+
 	}
 	{
 		constexpr int N = 19;
@@ -266,13 +354,175 @@ void float_funcs(FILE* fp) {
 }
 void double_funcs(FILE* fp) {
 	{
-		std::function<hiprec_real(hiprec_real)> func = [](hiprec_real x) {
-			static const auto threehalf = hiprec_real(3) / hiprec_real(2);
-			static const auto half = hiprec_real(1) / hiprec_real(2);
-			static const auto log2inv = hiprec_real(1) / log(hiprec_real(2));
-			return log(threehalf + x * half) * log2inv;
+		constexpr int M = 4;
+		static std::vector<double> co[M];
+		static constexpr double toler = std::numeric_limits<double>::epsilon() * 0.5;
+		int N = 0;
+		for (int i = 0; i < M; i++) {
+			hiprec_real a = hiprec_real(i) / hiprec_real(M) + hiprec_real(1);
+			hiprec_real b = hiprec_real(i + 1) / hiprec_real(M) + hiprec_real(1);
+			std::function<hiprec_real(hiprec_real)> func = [a,b](hiprec_real x) {
+				const auto sum = a + b;
+				const auto dif = b - a;
+				const auto half = hiprec_real(0.5);
+				return gamma(half*(sum + dif * x));
+			};
+			co[i] = ChebyCoeffs(func, toler, 0);
+			N = std::max(N, (int) co[i].size());
+		}
+		for (int n = 0; n < N; n++) {
+			for (int m = 0; m < M; m++) {
+				if (co[m].size() < n + 1) {
+					co[m].push_back(0.0);
+				}
+			}
+		}
+		fprintf(fp, "\n");
+		fprintf(fp, "simd_f64 tgamma(simd_f64 x) {\n");
+		fprintf(fp, "\tsimd_f64 y, z, x0, x1, s, c0;\n");
+		fprintf(fp, "\tsimd_i64 i0, n, c;\n");
+		fprintf(fp, "\tstatic constexpr double co[][4] = {\n");
+		for (int n = 0; n < N; n ++) {
+			fprintf(fp, "\t\t{");
+			for (int i = n; i < n + 1; i++) {
+				double c1, c2, c3, c4;
+				if (i < N) {
+					c1 = co[0][i];
+					c2 = co[1][i];
+					c3 = co[2][i];
+					c4 = co[3][i];
+				} else {
+					c1 = c3 = c4 = c2 = 99.0;
+				}
+				fprintf(fp, "%.17e, %.17e, %.17e, %.17e", c1, c2, c3, c4);
+				if (i != n) {
+					fprintf(fp, ",");
+				}
+				fprintf(fp, " ");
+			}
+			fprintf(fp, "}");
+			if (n + 1 < N) {
+				fprintf(fp, ",");
+			}
+			fprintf(fp, "\n");
+		}
+		fprintf(fp, "\t};\n");
+		double fac = 1.0;
+		fprintf(fp, "\tn = x < simd_f64(0);\n");
+		fprintf(fp, "\tc = (simd_i64(1) - n) && (x < simd_f64(1));\n");
+		fprintf(fp, "\tz = simd_f64(1) - x;\n");
+		fprintf(fp, "\tx = blend(x, z, n);\n");
+		fprintf(fp, "\tx += simd_f64(c);\n");
+		fprintf(fp, "\tz = x;\n");
+		fprintf(fp, "\ts = sin(simd_f64(M_PI) * x);\n");
+		fprintf(fp, "\tx -= floor(x);\n");
+		fprintf(fp, "\ti0 = x * simd_f64(4);\n");
+		fprintf(fp, "\tx1 = (simd_f64(i0) * simd_f64(0.25) + simd_f64(0.125));\n");
+		fprintf(fp, "\tx0 = simd_f64(8) * (x - x1);\n");
+		fprintf(fp, "\ty = c0.gather(co[%i], i0);\n", (N - 1));
+		for (int n = N - 2; n >= 0; n--) {
+			fprintf(fp, "\ty = fma(y, x0, c0.gather(co[%i], i0));\n", n);
+		}
+		fprintf(fp, "\tfor (int i = 0; i < 150; i++) {\n");
+		fprintf(fp, "\t\tz = max(z - simd_f64(1), simd_f64(1));\n");
+		fprintf(fp, "\t\ty *= z;\n");
+		fprintf(fp, "\t}\n");
+		fprintf(fp, "\ty = blend(y, y / x, c);\n");
+		fprintf(fp, "\ty = blend(y, simd_f64(M_PI) / (s * y), n);\n");
+		fprintf(fp, "\treturn y;\n");
+		fprintf(fp, "}\n");
+	}
+	{
+		static std::vector<double> co1;
+		static std::vector<double> co2;
+		static const hiprec_real z0(0.5);
+		static constexpr double toler = std::numeric_limits<double>::epsilon() * 0.5;
+		auto func1 = [](hiprec_real x) {
+			return asin((hiprec_real(1) + x) * z0 / hiprec_real(2));
 		};
-		auto coeff = ChebyCoeffs(func, std::numeric_limits<double>::epsilon() * 0.5);
+		auto func3 = [](hiprec_real y) {
+			const auto x = hiprec_real(1) - y * y;
+			const auto a = asin(x);
+			static const auto b = hiprec_real(2) * atan(hiprec_real(1));
+			const auto c = sqrt(hiprec_real(1) - x);
+			return (b - a)/c;
+		};
+		auto func2 = [func3](hiprec_real x) {
+			const static auto z1 = sqrt(hiprec_real(1) - z0);
+			return func3((z1 + x * hiprec_real(z1)) / hiprec_real(2));
+		};
+		co1 = ChebyCoeffs(func1, toler, 0);
+		co2 = ChebyCoeffs(func2, toler, 0);
+		int N = std::max(co1.size(), co2.size());
+		for (int n = 0; n < N; n++) {
+			if (co1.size() < n + 1) {
+				co1.push_back(0.0);
+			}
+			if (co2.size() < n + 1) {
+				co2.push_back(0.0);
+			}
+		}
+		fprintf(fp, "\n");
+		fprintf(fp, "simd_f64 asin(simd_f64 x) {\n");
+		fprintf(fp, "\tsimd_f64 y, s, z, w, x0, x1;\n");
+		fprintf(fp, "\tsimd_i64 i;\n");
+		fprintf(fp, "\tsize_t j;\n");
+		fprintf(fp, "\tstatic const simd_f64 co[][%i] = {\n", N);
+		for (int bits = 0; bits < 16; bits++) {
+			fprintf(fp, "\t\t{\n");
+			for (int n = 0; n < N; n++) {
+				fprintf(fp, "\t\t\t{");
+				for (int i = 0; i < 4; i++) {
+					double c1;
+					if ((bits >> i) & 0x1) {
+						c1 = co2[n];
+					} else {
+						c1 = co1[n];
+					}
+					fprintf(fp, "%.17e", c1);
+					if (i != 3) {
+						fprintf(fp, ", ");
+					}
+				}
+				fprintf(fp, "}");
+				if (n + 1 < N) {
+					fprintf(fp, ",");
+				}
+				fprintf(fp, "\n");
+			}
+			fprintf(fp, "\t\t}");
+			if (bits + 1 < 16) {
+				fprintf(fp, ",");
+			}
+			fprintf(fp, "\n");
+		}
+		fprintf(fp, "\t};\n");
+		fprintf(fp, "\ts = copysign(simd_f64(1), x);\n");
+		fprintf(fp, "\tx = abs(x);\n");
+		fprintf(fp, "\ti = x > simd_f64(%.17e);\n", (double) z0);
+		fprintf(fp, "\tz = sqrt(simd_f64(1) - x);\n");
+		fprintf(fp, "\tx0 = simd_f64(%.17e) * x - simd_f64(1);\n", (double) (hiprec_real(2) / z0));
+		fprintf(fp, "\tx1 = simd_f64(%.17e) * z - simd_f64(1);\n", (double) (hiprec_real(2) / sqrt(hiprec_real(1) - z0)));
+		fprintf(fp, "\tx = blend(x0, x1, i);\n");
+		fprintf(fp, "\ti = -i;\n");
+		fprintf(fp, "\tj =  _mm256_movemask_pd(((simd_f64&) i).v);\n");
+		fprintf(fp, "\ty = co[j][%i];\n", (N - 1));
+		for (int n = N - 2; n >= 0; n--) {
+			fprintf(fp, "\ty = fma(y, x, co[j][%i]);\n", n);
+		}
+		fprintf(fp, "\tz = simd_f64(%.17e) - y * z;\n", (double) (hiprec_real(2) * atan(hiprec_real(1))));
+		fprintf(fp, "\ty = blend(y, z, -i);\n");
+		fprintf(fp, "\treturn s * y;\n");
+		fprintf(fp, "}\n");
+	}
+	{
+		std::function<hiprec_real(hiprec_real)> func = [](hiprec_real x) {
+			static const auto c0 = hiprec_real(3) / (hiprec_real(2) * sqrt(hiprec_real(2)));
+			static const auto c1 = hiprec_real(1) / (hiprec_real(2) * sqrt(hiprec_real(2)));
+			static const auto log2inv = hiprec_real(1) / log(hiprec_real(2));
+			return log(c0 + x * c1) * log2inv;
+		};
+		auto coeff = ChebyCoeffs(func, std::numeric_limits<double>::epsilon() * double(1 << 21));
 		fprintf(fp, "\n");
 		fprintf(fp, "simd_f64 log2(simd_f64 x) {\n");
 		fprintf(fp, "\tsimd_f64 y, z;\n");
@@ -289,11 +539,20 @@ void double_funcs(FILE* fp) {
 		fprintf(fp, "\tx -= simd_f64(3);\n");
 		int N = coeff.size() - 1;
 		fprintf(fp, "\ty = simd_f64(%.17e);\n", coeff[N]);
-		for( int n = N - 1; n >= 0; n--){
+		for (int n = N - 1; n >= 0; n--) {
 			fprintf(fp, "\ty = fma(y, x, simd_f64(%.17e));\n", coeff[n]);
 		}
 		fprintf(fp, "\ty += z;\n");
+		fprintf(fp, "\ty += simd_f64(0.5);\n");
 		fprintf(fp, "\treturn y;\n");
+		fprintf(fp, "}\n");
+		fprintf(fp, "\n");
+		fprintf(fp, "simd_f64 log(simd_f64 x) {\n");
+		fprintf(fp, "\treturn log2(x) * simd_f64(%.17e);\n", (double) hiprec_real(1) / log2(exp(hiprec_real(1))));
+		fprintf(fp, "}\n");
+		fprintf(fp, "\n");
+		fprintf(fp, "simd_f64 log10(simd_f64 x) {\n");
+		fprintf(fp, "\treturn log2(x) * simd_f64(%.17e);\n", (double) hiprec_real(1) / log2(hiprec_real(10)));
 		fprintf(fp, "}\n");
 	}
 	{
