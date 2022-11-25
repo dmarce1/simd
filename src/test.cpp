@@ -271,10 +271,10 @@ double erf_test(double x) {
 int main() {
 	using namespace simd;
 	FILE* fp = fopen( "test.txt", "wt");
-	for (double r = 0.0; r < 8.0; r += .01) {
+	for (double r = 0.00001; r < 5.0; r += .01) {
 		double a = erf(simd_f32(r))[0];
-		double b = erf(r);
-		fprintf(fp, "%e %e %e %e\n", r, a, b, (a - b) / a);
+		double b = erff(r);
+		fprintf(fp, "%.10e %.10e %.10e %.10e\n", r, a, b, (a - b) / a);
 	}
 	fclose(fp);
 //	return 0;
@@ -309,7 +309,7 @@ int main() {
 	printf("Testing SIMD Functions\n");
 	printf("\nSingle Precision\n");
 	printf("name   speed        avg err      max err\n");
-	TEST1(float, simd_f32, erf, erff, erf, 0.145, 5, true);
+	TEST1(float, simd_f32, erf, erff, erf, -5, 5, true);
 	TEST1(float, simd_f32, tgamma, tgammaf, tgamma, -.99, -0.01, true);
 	TEST1(float, simd_f32, cosh, coshf, cosh, -10.0, 10.0, true);
 	TEST1(float, simd_f32, sinh, sinhf, sinh, 0.01, 10.0, true);
