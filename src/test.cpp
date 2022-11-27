@@ -329,7 +329,7 @@ int main() {
 	using namespace simd;
 	FILE* fp = fopen("test.txt", "wt");
 	double max_err = 0.0;
-	for (double r = -25.0; r < 25.0; r += .02) {
+	for (double r = -26.5; r < 26.5; r += .02) {
 		double a = erfc(simd_f64(r))[0];
 		double b = erfc(r);
 		max_err = std::max(max_err, fabs((a - b) / a));
@@ -373,6 +373,7 @@ int main() {
 	printf("\nSingle Precision\n");
 	printf("name   speed        avg err      max err\n");
 
+	TEST1(float, simd_f32, erfc, erfcf, erfc, -8.9, 8.9, true);
 	TEST1(float, simd_f32, asinh, asinhf, asinh, .001, 10, true);
 	TEST1(float, simd_f32, acosh, acoshf, acosh, 1.001, 10.0, true);
 	TEST1(float, simd_f32, atanh, atanhf, atanh, 0.001, 0.999, true);
@@ -393,7 +394,6 @@ int main() {
 	TEST1(float, simd_f32, sin, sinf, sin, -2.0 * M_PI, 2.0 * M_PI, false);
 	TEST1(float, simd_f32, tan, tanf, tan, -2.0 * M_PI, 2.0 * M_PI, true);
 	TEST1(float, simd_f32, exp, expf, exp, -86.0, 86.0, true);
-	TEST1(float, simd_f32, erfc, erfcf, erfc, -9.0, 9.0, true);
 	TEST1(float, simd_f32, cvt, cvt32_ref, cvt32_test, 1, +10000000, true);
 
 	printf("\nDouble Precision\n");
