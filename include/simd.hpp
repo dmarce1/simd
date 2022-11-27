@@ -454,11 +454,12 @@ simd_f32 log2(simd_f32);
 simd_f32 log(simd_f32);
 simd_f32 cos(simd_f32);
 simd_f32 exp(simd_f32);
+simd_f32 expm1(simd_f32);
 simd_f32 erfc(simd_f32);
 simd_f32 erf(simd_f32);
+simd_f32 cbrt(simd_f32);
 simd_f32 pow(simd_f32 y, simd_f32 x);
 simd_f32 asin(simd_f32);
-void erfcexp(simd_f32, simd_f32*, simd_f32*);
 
 inline simd_f32 acos(simd_f32 x) {
 	return simd_f32(M_PI_2) - asin(x);
@@ -559,13 +560,13 @@ inline simd_f32 rsqrt(simd_f32 x) {
 	return x;
 }
 
-inline simd_f32 abs(simd_f32 x) {
+inline simd_f32 fabs(simd_f32 x) {
 	simd_i32 i = (((simd_i32&) x) & simd_i32(0x7FFFFFFF));
 	return (simd_f32&) i;
 }
 
 inline simd_f32 copysign(simd_f32 x, simd_f32 y) {
-	simd_f32 result = abs(x);
+	simd_f32 result = fabs(x);
 	simd_i32 i = ((simd_i32&) result) | (simd_i32(0x80000000) & (simd_i32&) (y));
 	result = (simd_f32&) i;
 	return result;
@@ -608,11 +609,6 @@ inline simd_f32 modf(simd_f32 x, simd_f32* i) {
 	*i = simd_f32(x);
 	x -= *i;
 	return x;
-}
-
-inline void sincos(simd_f32 x, simd_f32* s, simd_f32* c) {
-	*s = sin(x);
-	*c = cos(x);
 }
 
 class simd_i64;
@@ -1031,10 +1027,10 @@ simd_f64 log2(simd_f64);
 simd_f64 cos(simd_f64);
 simd_f64 asin(simd_f64);
 simd_f64 exp(simd_f64);
+simd_f64 expm1(simd_f64);
 simd_f64 erfc(simd_f64);
 simd_f64 erf(simd_f64);
-simd_f64 erf(simd_f64);
-void erfcexp(simd_f64, simd_f64*, simd_f64*);
+simd_f64 cbrt(simd_f64);
 
 inline simd_f64 pow(simd_f64 y, simd_f64 x) {
 	return exp(x * log(y));
@@ -1155,13 +1151,13 @@ inline simd_f64 tanh(simd_f64 x) {
 	return sinh(x) / cosh(x);
 }
 
-inline simd_f64 abs(simd_f64 x) {
+inline simd_f64 fabs(simd_f64 x) {
 	simd_i64 i = (((simd_i64&) x) & simd_i64(0x7FFFFFFFFFFFFFFFLL));
 	return (simd_f64&) i;
 }
 
 inline simd_f64 copysign(simd_f64 x, simd_f64 y) {
-	simd_f64 result = abs(x);
+	simd_f64 result = fabs(x);
 	simd_i64 i = ((simd_i64&) result) | (simd_i64(0x8000000000000000LL) & (simd_i64&) (y));
 	result = (simd_f64&) i;
 	return result;
@@ -1179,11 +1175,6 @@ inline simd_f64 modf(simd_f64 x, simd_f64* i) {
 	*i = simd_f64(x);
 	x -= *i;
 	return x;
-}
-
-inline void sincos(simd_f64 x, simd_f64* s, simd_f64* c) {
-	*s = sin(x);
-	*c = cos(x);
 }
 
 }
