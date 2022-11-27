@@ -861,20 +861,62 @@ void double_funcs(FILE* fp) {
 		fprintf(fp, "\n");
 	}
 	{
-		constexpr int N = 13;
-		hiprec_real c0[N];
-		int nf = 1;
+		constexpr int N = 6;
+		constexpr int M = 64;
+		static double coeff[N];
+		static double base[M * 2028];
+		int fac = 1;
+		for (int n = 0; n < M * 2028; n++) {
+			int e = n - M * 1023;
+			base[n] = pow(hiprec_real(2), hiprec_real(e) / hiprec_real(M));
+		}
 		for (int n = 0; n < N; n++) {
-			c0[n] = hiprec_real(1) / hiprec_real(nf);
-			nf *= (n + 1);
+			coeff[n] = hiprec_real(1) / hiprec_real(fac);
+			fac *= n + 1;
 		}
 		fprintf(fp, "\n");
 		fprintf(fp, "simd_f64 exp(simd_f64 x) {\n");
-		fprintf(fp, "simd_f64 a, b;");
-		fprintf(fp, "a = x * simd_f64(%.17e)\n;", (double)(hiprec_real(1) / hiprec_real(M_LN2)));
-		fprintf(fp, "b = fma(x, simd_f64(%.17e), -a);\n", (double)(hiprec_real(1) / hiprec_real(M_LN2)));
-		fprintf(fp, "\treturn exp2(a) * exp2(b);\n");
+		fprintf(fp, "\tstatic constexpr double base[%i] = {", M * 2028);
+		for( int m = 0; m < M * 2028; m++) {
+			if( m % 2028 == 0 ) {
+				fprintf(fp, "\n\t\t");
+			}
+			fprintf(fp, "%25.17e", base[m]);
+			if( m != M * 2028 - 1 ) {
+				fprintf(fp, ", ");
+			}
+		}
+		fprintf(fp, "\n\t};\n");
+		fprintf(fp, "\tsimd_f64 x0, x1, b, y;\n");
+		fprintf(fp, "\tsimd_i64 i;\n");
+		fprintf(fp, "\tx1 = x;\n");
+		fprintf(fp, "\tx0 = round(x * simd_f64(%.17e));\n", (double) (hiprec_real(M) / log(hiprec_real(2))));
+		fprintf(fp, "\tx -= x0 * simd_f64(%.17e);\n", (double) (log(hiprec_real(2)) / hiprec_real(M)));
+		fprintf(fp, "\ty = simd_f64(%.17e);\n", coeff[N - 1]);
+		for( int n = N - 2; n >= 0; n--) {
+			fprintf(fp, "\ty = fma(y, x, simd_f64(%.17e));\n", coeff[n]);
+		}
+		fprintf(fp, "\ti = simd_i64(x0) + simd_i64(%i);\n", M * 1023);
+		fprintf(fp, "\tb.gather(base, i);\n");
+		fprintf(fp, "\ty *= b * fma(simd_f64(-3.34e-17), x1, simd_f64(1));\n");
+		fprintf(fp, "\treturn y;\n");
 		fprintf(fp, "}\n\n");
+
+		/*double x = x1;
+		double x0 = std::round(x * (hiprec_real(M) / hiprec_real(M_LN2)));
+		x -= x0 * (hiprec_real(M_LN2) / hiprec_real(M));
+
+		double y = coeff[N - 1];
+		for (int n = N - 2; n >= 0; n--) {
+			y = std::fma(x, y, coeff[n]);
+		}
+		y *= base[(int) (x0) + M * 1023];
+		return y * (1 - 3.333333e-17 * x1);
+		fprintf(fp, "simd_f64 a, b;");
+		fprintf(fp, "a = x * simd_f64(%.17e)\n;", (double) (hiprec_real(1) / hiprec_real(M_LN2)));
+		fprintf(fp, "b = fma(x, simd_f64(%.17e), -a);\n", (double) (hiprec_real(1) / hiprec_real(M_LN2)));
+		fprintf(fp, "\treturn exp2(a) * exp2(b);\n");
+		fprintf(fp, "}\n\n");*/
 	}
 
 	{

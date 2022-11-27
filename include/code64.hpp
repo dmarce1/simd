@@ -1,4 +1,3 @@
-
 simd_f64 cbrt(simd_f64 x) {
 	simd_f64 y, s;
 	simd_i64 e;
@@ -19,3 +18,4 @@ simd_f64 cbrt(simd_f64 x) {
 	y *= s;
 	return y;
 }
+

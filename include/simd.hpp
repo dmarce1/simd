@@ -478,7 +478,7 @@ inline simd_f32 blend(simd_f32 a, simd_f32 b, simd_i32 mask) {
 }
 
 inline simd_f32 sinh(simd_f32 x) {
-	return simd_f32(0.5) * (exp(x) - exp(-x));
+	return simd_f32(0.5) * (expm1(x) - expm1(-x));
 }
 
 inline simd_f32 cosh(simd_f32 x) {
@@ -490,15 +490,27 @@ inline simd_f32 tanh(simd_f32 x) {
 }
 
 inline simd_f32 asinh(simd_f32 x) {
-	return log(x + sqrt(x * x + simd_f32(1)));
+	const auto y = log(x + sqrt(x * x + simd_f32(1)));
+	const auto expm1p = expm1(y);
+	const auto expm1m = expm1(-y);
+	const auto sinhy = (expm1p - expm1m) * simd_f32(0.5);
+	const auto coshy = (simd_f32(2) + expm1p + expm1m) * simd_f32(0.5);
+	return y + (x - sinhy) / coshy;
+
 }
 
 inline simd_f32 acosh(simd_f32 x) {
-	return log(x + sqrt(x * x - simd_f32(1)));
+	const auto z = x - simd_f32(1);
+	return log(x + sqrt(z * (z + simd_f32(2))));
 }
 
 inline simd_f32 atanh(simd_f32 x) {
-	return simd_f32(0.5) * log((simd_f32(1) + x) / (simd_f32(1) - x));
+	const auto y = simd_f32(0.5) * log((simd_f32(1) + x) / (simd_f32(1) - x));
+	const auto expm1p = expm1(y);
+	const auto expm1m = expm1(-y);
+	const auto sinhy = (expm1p - expm1m) * simd_f32(0.5);
+	const auto coshy = (simd_f32(2) + expm1p + expm1m) * simd_f32(0.5);
+	return y + (x - sinhy / coshy) / (coshy * coshy);
 }
 
 inline simd_f32 pow(simd_f32 y, simd_f32 x) {
@@ -565,11 +577,19 @@ inline simd_f32 fabs(simd_f32 x) {
 	return (simd_f32&) i;
 }
 
+inline simd_f32 abs(simd_f32 x) {
+	return fabs(x);
+}
+
 inline simd_f32 copysign(simd_f32 x, simd_f32 y) {
 	simd_f32 result = fabs(x);
 	simd_i32 i = ((simd_i32&) result) | (simd_i32(0x80000000) & (simd_i32&) (y));
 	result = (simd_f32&) i;
 	return result;
+}
+
+inline simd_f32 atan2(simd_f32 y, simd_f32 x) {
+	return atan(y / x) + copysign(copysign(M_PI_2, x) - simd_f32(M_PI_2), y);
 }
 
 inline simd_f32 frexp(simd_f32 x, simd_i32* e) {
@@ -1017,6 +1037,7 @@ public:
 	friend simd_f64 blend(simd_f64, simd_f64, simd_i64);
 	friend simd_f64 asin(simd_f64 x);
 	friend class simd_i64;
+	friend class simd_f64_2;
 };
 
 simd_f64 pow(simd_f64 y, simd_f64 x);
@@ -1027,13 +1048,14 @@ simd_f64 log2(simd_f64);
 simd_f64 cos(simd_f64);
 simd_f64 asin(simd_f64);
 simd_f64 exp(simd_f64);
+simd_f64 exp2(simd_f64);
 simd_f64 expm1(simd_f64);
 simd_f64 erfc(simd_f64);
 simd_f64 erf(simd_f64);
 simd_f64 cbrt(simd_f64);
 
 inline simd_f64 pow(simd_f64 y, simd_f64 x) {
-	return exp(x * log(y));
+	return exp2(x * log2(y));
 }
 
 inline simd_f64 acos(simd_f64 x) {
@@ -1053,15 +1075,49 @@ inline simd_f64 blend(simd_f64 a, simd_f64 b, simd_i64 mask) {
 }
 
 inline simd_f64 asinh(simd_f64 x) {
-	return log(x + sqrt(x * x + simd_f64(1)));
+	const auto y = log(x + sqrt(x * x + simd_f64(1)));
+	const auto expm1p = expm1(y);
+	const auto expm1m = expm1(-y);
+	const auto sinhy = (expm1p - expm1m) * simd_f64(0.5);
+	const auto coshy = (simd_f64(2) + expm1p + expm1m) * simd_f64(0.5);
+	return y + (x - sinhy) / coshy;
+
 }
 
 inline simd_f64 acosh(simd_f64 x) {
-	return log(x + sqrt(x * x - simd_f64(1)));
+	const auto z = x - simd_f64(1);
+	return log(x + sqrt(z * (z + simd_f64(2))));
 }
 
 inline simd_f64 atanh(simd_f64 x) {
-	return simd_f64(0.5) * log((simd_f64(1) + x) / (simd_f64(1) - x));
+	const auto y = simd_f64(0.5) * log((simd_f64(1) + x) / (simd_f64(1) - x));
+	const auto expm1p = expm1(y);
+	const auto expm1m = expm1(-y);
+	const auto sinhy = (expm1p - expm1m) * simd_f64(0.5);
+	const auto coshy = (simd_f64(2) + expm1p + expm1m) * simd_f64(0.5);
+	return y + (x - sinhy / coshy) / (coshy * coshy);
+}
+
+simd_f64 exp2(simd_f64 x);
+
+inline simd_f64 fabs(simd_f64 x) {
+	simd_i64 i = (((simd_i64&) x) & simd_i64(0x7FFFFFFFFFFFFFFFLL));
+	return (simd_f64&) i;
+}
+
+inline simd_f64 abs(simd_f64 x) {
+	return fabs(x);
+}
+
+inline simd_f64 copysign(simd_f64 x, simd_f64 y) {
+	simd_f64 result = fabs(x);
+	simd_i64 i = ((simd_i64&) result) | (simd_i64(0x8000000000000000LL) & (simd_i64&) (y));
+	result = (simd_f64&) i;
+	return result;
+}
+
+inline simd_f64 atan2(simd_f64 y, simd_f64 x) {
+	return atan(y / x) + copysign(copysign(M_PI_2, x) - simd_f64(M_PI_2), y);
 }
 
 inline simd_f64 max(simd_f64 a, simd_f64 b) {
@@ -1140,7 +1196,7 @@ inline simd_f64 rsqrt(simd_f64 x) {
 }
 
 inline simd_f64 sinh(simd_f64 x) {
-	return simd_f64(0.5) * (exp(x) - exp(-x));
+	return simd_f64(0.5) * (expm1(x) - expm1(-x));
 }
 
 inline simd_f64 cosh(simd_f64 x) {
@@ -1149,18 +1205,6 @@ inline simd_f64 cosh(simd_f64 x) {
 
 inline simd_f64 tanh(simd_f64 x) {
 	return sinh(x) / cosh(x);
-}
-
-inline simd_f64 fabs(simd_f64 x) {
-	simd_i64 i = (((simd_i64&) x) & simd_i64(0x7FFFFFFFFFFFFFFFLL));
-	return (simd_f64&) i;
-}
-
-inline simd_f64 copysign(simd_f64 x, simd_f64 y) {
-	simd_f64 result = fabs(x);
-	simd_i64 i = ((simd_i64&) result) | (simd_i64(0x8000000000000000LL) & (simd_i64&) (y));
-	result = (simd_f64&) i;
-	return result;
 }
 
 inline simd_f64 sin(simd_f64 x) {
@@ -1176,6 +1220,92 @@ inline simd_f64 modf(simd_f64 x, simd_f64* i) {
 	x -= *i;
 	return x;
 }
+
+struct simd_f64_2 {
+	simd_f64 x;
+	simd_f64 y;
+	static inline simd_f64_2 quick_two_sum(simd_f64 a_, simd_f64 b_) {
+		simd_f64_2 r;
+		volatile __m256d a = a_.v;
+		volatile __m256d b = b_.v;
+		volatile __m256d s = _mm256_add_pd(a, b);
+		volatile __m256d tmp = _mm256_sub_pd(s, a);
+		volatile __m256d e = _mm256_sub_pd(b, tmp);
+		r.x.v = s;
+		r.y.v = e;
+		return r;
+	}
+	static inline simd_f64_2 two_sum(simd_f64 a_, simd_f64 b_) {
+		simd_f64_2 r;
+		volatile __m256d a = a_.v;
+		volatile __m256d b = b_.v;
+		volatile __m256d s = _mm256_add_pd(a, b);
+		volatile __m256d v = _mm256_sub_pd(s, a);
+		volatile __m256d tmp1 = _mm256_sub_pd(s, v);
+		volatile __m256d tmp2 = _mm256_sub_pd(a, tmp1);
+		volatile __m256d tmp3 = _mm256_sub_pd(b, v);
+		volatile __m256d e = _mm256_add_pd(tmp2, tmp3);
+		r.x.v = s;
+		r.y.v = e;
+		return r;
+	}
+	static inline simd_f64_2 two_product(simd_f64 a_, simd_f64 b_) {
+		simd_f64_2 r;
+		const static double zero = 0.0;
+		volatile __m256d z = _mm256_broadcast_sd(&zero);
+		volatile __m256d a = a_.v;
+		volatile __m256d b = b_.v;
+		volatile __m256d xx = _mm256_mul_pd(a, b);
+		volatile __m256d zz = _mm256_sub_pd(z, xx);
+		volatile __m256d yy = _mm256_fmadd_pd(a, b, zz);
+		r.x.v = xx;
+		r.y.v = yy;
+		return r;
+	}
+public:
+	inline simd_f64_2& operator=(simd_f64 a) {
+		const static double zero = 0.0;
+		x = a;
+		y.v = _mm256_broadcast_sd(&zero);
+		return *this;
+	}
+	inline simd_f64_2(simd_f64 a) {
+		*this = a;
+	}
+	inline simd_f64_2() {
+	}
+	inline operator simd_f64() const {
+		return x + y;
+	}
+	inline simd_f64_2 operator+(simd_f64_2 other) const {
+		simd_f64_2 s, t;
+		s = two_sum(x, other.x);
+		t = two_sum(y, other.y);
+		s.y += t.x;
+		s = quick_two_sum(s.x, s.y);
+		s.y += t.y;
+		s = quick_two_sum(s.x, s.y);
+		return s;
+	}
+	inline simd_f64_2 operator*(simd_f64_2 other) const {
+		simd_f64_2 p;
+		p = two_product(x, other.x);
+		p.y += x * other.y;
+		p.y += y * other.x;
+		p = quick_two_sum(p.x, p.y);
+		return p;
+	}
+	inline simd_f64_2 operator-() const {
+		simd_f64_2 r;
+		r.x = -x;
+		r.y = -y;
+		return r;
+	}
+	inline simd_f64_2 operator-(simd_f64_2 other) const {
+		return *this + -other;
+	}
+
+};
 
 }
 
