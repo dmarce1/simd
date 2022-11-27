@@ -329,9 +329,9 @@ int main() {
 	using namespace simd;
 	FILE* fp = fopen("test.txt", "wt");
 	double max_err = 0.0;
-	for (double r = -696.0; r < 696.0; r += .1) {
-		double a = exp(simd_f64(r))[0];
-		double b = exp(r);
+	for (double r = -25.0; r < 25.0; r += .02) {
+		double a = erfc(simd_f64(r))[0];
+		double b = erfc(r);
 		max_err = std::max(max_err, fabs((a - b) / a));
 		fprintf(fp, "%.10e %.10e %.10e %.10e\n", r, a, b, (a - b) / a);
 	}

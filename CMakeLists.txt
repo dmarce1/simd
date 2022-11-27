@@ -14,7 +14,7 @@ execute_process(
 )	
 
 execute_process(
-	COMMAND ${CMAKE_CXX_COMPILER} -g -O0 ${CMAKE_CURRENT_SOURCE_DIR}/src/codegen.cpp -pthread -lmpfr -lgmp -o codegen
+	COMMAND ${CMAKE_CXX_COMPILER} -g -O3 ${CMAKE_CURRENT_SOURCE_DIR}/src/codegen.cpp -pthread -lmpfr -lgmp -o codegen
   	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 execute_process(
