@@ -47,6 +47,110 @@ void include(FILE* fp, std::string filename) {
 
 void float_funcs(FILE* fp) {
 	include(fp, "../include/code.hpp");
+
+	/* sin */
+	{
+		static constexpr double toler = std::numeric_limits<float>::epsilon() * 0.5;
+		std::vector<double> co;
+		long long nfac = 1;
+		constexpr int N = 7;
+		for (int n = 0; n < N; n++) {
+			co.push_back(hiprec_real(1) / hiprec_real((long double) nfac));
+			nfac *= (2 * co.size());
+			nfac *= -(2 * co.size() + 1);
+		}
+
+		fprintf(fp, "\n");
+		fprintf(fp, "simd_f32 sin(simd_f32 x) {\n");
+		fprintf(fp, "\tsimd_f32 s, y, x1, z, x2, near;\n");
+		fprintf(fp, "\tx1 = x;\n");
+		fprintf(fp, "\tnear = simd_f32(%.17e) * round(x * simd_f32(%.17e));\n", M_PI, 1.0 / M_PI);
+		fprintf(fp, "\tx -= round(x * simd_f32(%.17e)) * simd_f32(%.17e);\n", 0.5 / M_PI, 2.0 * M_PI);
+		fprintf(fp, "\ts = copysign(simd_f32(1), x);\n");
+		fprintf(fp, "\tx = abs(x);\n");
+		fprintf(fp, "\tx = min(x, simd_f32(M_PI) - x);\n");
+		fprintf(fp, "\tx = copysign(x, s);\n");
+		fprintf(fp, "\tx2 = x * x;\n");
+		fprintf(fp, "\ty = simd_f32(%.17e);\n", co[N - 1]);
+		for (int n = N - 2; n >= 0; n--) {
+			fprintf(fp, "\ty = fma(y, x2, simd_f32(%.17e));\n", co[n]);
+		}
+		constexpr double fudge = -(std::numeric_limits<float>::epsilon() / exp(1) - 1.45e-10) * 2.0 / M_PI;
+		fprintf(fp, "\ty *= x;\n");
+		fprintf(fp, "\tz = fma(simd_f32(%.27e), (near / (near - x1)), simd_f32(1));\n", fudge);
+		fprintf(fp, "\treturn z * y;\n");
+		fprintf(fp, "}\n");
+	}
+	/* cos */
+	{
+		static constexpr double toler = std::numeric_limits<float>::epsilon() * 0.5;
+		std::vector<double> co;
+		long long nfac = 1;
+		constexpr int N = 8;
+		for (int n = 0; n < N; n++) {
+			co.push_back(hiprec_real(1) / hiprec_real((long double) nfac));
+			nfac *= (2 * co.size() - 1);
+			nfac *= -(2 * co.size());
+		}
+
+		fprintf(fp, "\n");
+		fprintf(fp, "simd_f32 cos(simd_f32 x) {\n");
+		fprintf(fp, "\tsimd_f32 s, y, x1, z, x2, near;\n");
+		fprintf(fp, "\tx1 = x;\n");
+		fprintf(fp, "\tnear = simd_f32(%.17e) * round((x + simd_f32(%.17e)) * simd_f32(%.17e)) - simd_f32(%.17e);\n", M_PI, 0.5 * M_PI, 1.0 / M_PI, 0.5 * M_PI);
+		fprintf(fp, "\tx -= round(x * simd_f32(%.17e)) * simd_f32(%.17e);\n", 0.5 / M_PI, 2.0 * M_PI);
+		fprintf(fp, "\ts = copysign(simd_f32(1), simd_f32(%.17e) - abs(x));\n", M_PI / 2.0);
+		fprintf(fp, "\tx = abs(x);\n");
+		fprintf(fp, "\tx = min(x, simd_f32(M_PI) - x);\n");
+		fprintf(fp, "\tx = copysign(x, s);\n");
+		fprintf(fp, "\tx2 = x * x;\n");
+		fprintf(fp, "\ty = simd_f32(%.17e);\n", co[N - 1]);
+		for (int n = N - 2; n >= 0; n--) {
+			fprintf(fp, "\ty = fma(y, x2, simd_f32(%.17e));\n", co[n]);
+		}
+		constexpr double fudge = -(std::numeric_limits<float>::epsilon() / exp(1) - 1.45e-10) * 2.0 / M_PI;
+		fprintf(fp, "\tz = fma(simd_f32(%.27e), (near / (near - x1)), simd_f32(1));\n", fudge);
+		fprintf(fp, "\treturn s * z * y;\n");
+		fprintf(fp, "}\n");
+	}
+
+	/* tan */
+	{
+		static constexpr double toler = std::numeric_limits<float>::epsilon() * 0.5;
+		constexpr double co[] = { 1., 0.33333333333333333, 0.13333333333333333, 0.053968253968253968, 0.021869488536155203, 0.0088632355299021966,
+				0.003592128036572481, 0.0014558343870513183, 0.00059002744094558598, 0.00023912911424355248, 0.000096915379569294503, 0.000039278323883316834,
+				0.000015918905069328965 };
+		const int N = 13;
+		fprintf(fp, "\n");
+		fprintf(fp, "simd_f32 tan(simd_f32 x) {\n");
+		fprintf(fp, "\tsimd_f32 s, y, x1, x2, z, num, near, sgn;\n");
+		fprintf(fp, "\tsimd_i32 inv;\n");
+		fprintf(fp, "\tnum = floor(abs(x) * simd_f32(%.17e) + simd_f32(0.5));\n", 2.0 / M_PI);
+		fprintf(fp, "\tsgn = simd_f32(2) * (num - simd_f32(2) * floor(num * simd_f32(0.5))) - simd_f32(1);\n");
+		fprintf(fp, "\tnear = simd_f32(%.17e) * round(x * simd_f32(%.17e));\n", M_PI / 2.0, 2.0 / M_PI);
+		fprintf(fp, "\tx1 = x;\n");
+		fprintf(fp, "\tx = fma(round(x * simd_f32(%.17e)), simd_f32(-%.17e), x);\n", 1.0 / M_PI, M_PI);
+		fprintf(fp, "\ts = copysign(simd_f32(1), x);\n");
+		fprintf(fp, "\tx = abs(x);\n");
+		fprintf(fp, "\tinv = x > simd_f32(M_PI_4);\n");
+		fprintf(fp, "\tx = min(x, simd_f32(M_PI_2) - x);\n");
+		fprintf(fp, "\tx = copysign(x, s);\n");
+		fprintf(fp, "\tx2 = x * x;\n");
+		fprintf(fp, "\ty = simd_f32(%.17e);\n", co[N - 1]);
+		for (int n = N - 2; n >= 0; n--) {
+			fprintf(fp, "\ty = fma(y, x2, simd_f32(%.17e));\n", co[n]);
+		}
+		fprintf(fp, "\ty = x * y;\n");
+		fprintf(fp, "\tz = simd_f32(1) / y;\n");
+		fprintf(fp, "\ty = blend(y, z, inv);\n");
+		constexpr double fudge = (std::numeric_limits<float>::epsilon() / exp(1) - 1.45e-10) * 2.0 / M_PI;
+		fprintf(fp, "\tz = fma(copysign(simd_f32(%.27e), sgn), (near / (near - x1)), simd_f32(1));\n", fudge);
+		fprintf(fp, "\ty *= z;\n");
+		fprintf(fp, "\treturn y;\n");
+		fprintf(fp, "}\n");
+	}
+
+	/* erf */
 	{
 		constexpr int M = 3;
 		static std::vector<double> co[M];
@@ -214,6 +318,7 @@ void float_funcs(FILE* fp) {
 		fprintf(fp, "}\n");
 	}
 
+	/* asin */
 	{
 		static std::vector<double> co1;
 		static std::vector<double> co2;
@@ -293,6 +398,7 @@ void float_funcs(FILE* fp) {
 		fprintf(fp, "}\n");
 	}
 
+	/* log2 */
 	{
 		std::function<hiprec_real(hiprec_real)> func = [](hiprec_real x) {
 			static const auto c0 = hiprec_real(3) / (hiprec_real(2) * sqrt(hiprec_real(2)));
@@ -334,34 +440,34 @@ void float_funcs(FILE* fp) {
 		fprintf(fp, "}\n");
 
 	}
-	{
-		constexpr int N = 19;
-		polynomial c0;
-		double coeff[N];
-		coeff[0] = jn(0, 1.0);
-		double b = -2.0;
-		auto Tn = Tns(2 * N);
-		for (int n = 1; n < N; n++) {
-			coeff[n] = b * jn(2 * n, 1.0);
-			b = -b;
-		}
-		for (int n = 0; n < N; n++) {
-			c0 = poly_add(c0, poly_mul(poly_term(0, coeff[n]), Tn[2 * n]));
-		}
-		fprintf(fp, "\n");
-		fprintf(fp, "simd_f32 cos(simd_f32 x) {\n");
-		fprintf(fp, "\tsimd_f32 p, y;\n");
-		fprintf(fp, "\tp = x * simd_f32(%.17e) - simd_f32(0.5);\n", 1.0 / (2.0 * M_PI));
-		fprintf(fp, "\tp -= floor(p);\n");
-		fprintf(fp, "\tp -= simd_f32(0.5);\n");
-		fprintf(fp, "\tx = p * p * simd_f32(%.17e);\n", 4.0 * M_PI * M_PI);
-		fprintf(fp, "\ty = simd_f32(%.17e);\n", double(c0[N - 1]));
-		for (int n = N - 3; n >= 0; n -= 2) {
-			fprintf(fp, "\ty = fma(x, y, simd_f32(%.17e));\n", double(c0[n]));
-		}
-		fprintf(fp, "\treturn y;\n");
-		fprintf(fp, "}\n");
-	}
+	/* cos */
+	/*{
+	 static constexpr double toler = std::numeric_limits<float>::epsilon() * 0.5;
+	 std::vector<double> co;
+	 long long nfac = 1;
+	 constexpr int N = 10;
+	 for( int n = 0; n < N; n++) {
+	 nfac *= (2 * co.size() + 1);
+	 co.push_back(hiprec_real(1) / hiprec_real((long double)nfac));
+	 nfac *= -(2 * co.size());
+	 }
+
+	 fprintf(fp, "\n");
+	 fprintf(fp, "simd_f32 cos(simd_f32 x) {\n");
+	 fprintf(fp, "\tsimd_f32 s, y, x1, x2;\n");
+	 fprintf(fp, "\tx -= round(x * simd_f32(%.17e)) * simd_f32(%.17e);\n", 0.5 / M_PI, 2.0 * M_PI);
+	 fprintf(fp, "\ts = copysign(simd_f32(1), x);\n");
+	 fprintf(fp, "\tx = abs(x);\n");
+	 fprintf(fp, "\tx = min(x, simd_f32(M_PI) - x);\n");
+	 fprintf(fp, "\tx = copysign(x, s);\n");
+	 fprintf(fp, "\tx2 = x * x;\n");
+	 fprintf(fp, "\ty = simd_f32(%.17e);\n", co[N - 1]);
+	 for (int n = N - 2; n >= 0; n--) {
+	 fprintf(fp, "\ty = fma(y, x2, simd_f32(%.17e));\n", co[n]);
+	 }
+	 fprintf(fp, "\treturn x * y;\n");
+	 fprintf(fp, "}\n");
+	 }*/
 	{
 		constexpr int N = 9;
 		double c0[N];
@@ -418,77 +524,77 @@ void float_funcs(FILE* fp) {
 		fprintf(fp, "}\n\n");
 	}
 
-/*{
-		constexpr int N = 16;
-		constexpr int M = 4;
-		constexpr double xmax = 9.19;
-		static double c0[N][M];
-		double a0 = 1.00;
-		double a1 = 3.0;
-		double a2 = 6.0;
-		double a3 = (8.0 + xmax) * 0.5;
-		for (int m = 0; m < M; m++) {
-			double a;
-			if (m == 0) {
-				a = a0;
-			} else if (m == 1) {
-				a = a1;
-			} else if (m == 2) {
-				a = a2;
-			} else {
-				a = a3;
-			}
-			c0[0][m] = exp(a * a) * erfc(a);
-			c0[1][m] = 2.0 * (-1.0 / sqrt(M_PI) + a * c0[0][m]);
-			for (int n = 2; n < N - 1; n++) {
-				c0[n][m] = 2.0 / n * (a * c0[n - 1][m] + c0[n - 2][m]);
-			}
-			c0[N - 1][m] = -99.0;
-		}
-		fprintf(fp, "simd_f32 erfc(simd_f32 x) {\n");
-		fprintf(fp, "\tconst static simd_f32 x0 = {%24.17ef, %24.17ef, %24.17ef, %24.17ef, 99.0f, 99.0f, 99.0f, 99.0f};\n", a0, a1, a2, a3);
-		fprintf(fp, "\tconst static simd_f32 coeff[%i] = {\n", N / 2);
-		for (int n = 0; n < N; n += 2) {
-			fprintf(fp, "\t\t{");
-			for (int m = 0; m < M; m++) {
-				fprintf(fp, "%24.17ef, ", c0[n][m]);
-			}
-			for (int m = 0; m < M; m++) {
-				fprintf(fp, "%24.17ef", c0[n + 1][m]);
-				if (m != M - 1) {
-					fprintf(fp, ", ");
-				}
-			}
-			fprintf(fp, "}");
-			if (n != N - 2) {
-				fprintf(fp, ", ");
-			}
-			fprintf(fp, "\n");
-		}
-		fprintf(fp, "\t};\n");
-		fprintf(fp, "\tsimd_f32 r, y, c0, c1, e, z, a, neg, rng;\n");
-		fprintf(fp, "\tsimd_i32 i0, i1;\n");
-		fprintf(fp, "\tneg = simd_f32(x < simd_f32(0));\n");
-		fprintf(fp, "\trng = simd_f32(x < simd_f32(%.17e));\n", xmax);
-		fprintf(fp, "\tx = min(fabs(x), simd_f32(%.17e));\n", xmax);
-		fprintf(fp, "\ty = x * x ;\n");
-		fprintf(fp, "\tz = fma(x, x, -y);\n");
-		fprintf(fp, "\te = exp(-y) * (simd_f32(1) - z);\n");
-		fprintf(fp, "\ti0 = max(((((simd_i32&) x) & simd_i32(0x7F800000)) >> int(23)) - simd_i32(127), simd_i32(0));\n");
-		fprintf(fp, "\ti1 = i0 + simd_i32(%i);\n", M);
-		fprintf(fp, "\tx -= x0.permute(i0);\n");
-		fprintf(fp, "\ty = coeff[%i].permute(i0);\n", N / 2 - 1);
-		for (int n = N - 3; n >= 0; n -= 2) {
-			fprintf(fp, "\tc1 = coeff[%i].permute(i1);\n", n / 2);
-			fprintf(fp, "\tc0 = coeff[%i].permute(i0);\n", n / 2);
-			fprintf(fp, "\ty = fma(y, x, c1);\n");
-			fprintf(fp, "\ty = fma(y, x, c0);\n");
-		}
-		fprintf(fp, "\ty *= e * rng;\n");
-		fprintf(fp, "\treturn fma(simd_f32(1) - neg, y, neg * (simd_f32(2) - y));\n");
-		fprintf(fp, "}\n");
+	/*{
+	 constexpr int N = 16;
+	 constexpr int M = 4;
+	 constexpr double xmax = 9.19;
+	 static double c0[N][M];
+	 double a0 = 1.00;
+	 double a1 = 3.0;
+	 double a2 = 6.0;
+	 double a3 = (8.0 + xmax) * 0.5;
+	 for (int m = 0; m < M; m++) {
+	 double a;
+	 if (m == 0) {
+	 a = a0;
+	 } else if (m == 1) {
+	 a = a1;
+	 } else if (m == 2) {
+	 a = a2;
+	 } else {
+	 a = a3;
+	 }
+	 c0[0][m] = exp(a * a) * erfc(a);
+	 c0[1][m] = 2.0 * (-1.0 / sqrt(M_PI) + a * c0[0][m]);
+	 for (int n = 2; n < N - 1; n++) {
+	 c0[n][m] = 2.0 / n * (a * c0[n - 1][m] + c0[n - 2][m]);
+	 }
+	 c0[N - 1][m] = -99.0;
+	 }
+	 fprintf(fp, "simd_f32 erfc(simd_f32 x) {\n");
+	 fprintf(fp, "\tconst static simd_f32 x0 = {%24.17ef, %24.17ef, %24.17ef, %24.17ef, 99.0f, 99.0f, 99.0f, 99.0f};\n", a0, a1, a2, a3);
+	 fprintf(fp, "\tconst static simd_f32 coeff[%i] = {\n", N / 2);
+	 for (int n = 0; n < N; n += 2) {
+	 fprintf(fp, "\t\t{");
+	 for (int m = 0; m < M; m++) {
+	 fprintf(fp, "%24.17ef, ", c0[n][m]);
+	 }
+	 for (int m = 0; m < M; m++) {
+	 fprintf(fp, "%24.17ef", c0[n + 1][m]);
+	 if (m != M - 1) {
+	 fprintf(fp, ", ");
+	 }
+	 }
+	 fprintf(fp, "}");
+	 if (n != N - 2) {
+	 fprintf(fp, ", ");
+	 }
+	 fprintf(fp, "\n");
+	 }
+	 fprintf(fp, "\t};\n");
+	 fprintf(fp, "\tsimd_f32 r, y, c0, c1, e, z, a, neg, rng;\n");
+	 fprintf(fp, "\tsimd_i32 i0, i1;\n");
+	 fprintf(fp, "\tneg = simd_f32(x < simd_f32(0));\n");
+	 fprintf(fp, "\trng = simd_f32(x < simd_f32(%.17e));\n", xmax);
+	 fprintf(fp, "\tx = min(fabs(x), simd_f32(%.17e));\n", xmax);
+	 fprintf(fp, "\ty = x * x ;\n");
+	 fprintf(fp, "\tz = fma(x, x, -y);\n");
+	 fprintf(fp, "\te = exp(-y) * (simd_f32(1) - z);\n");
+	 fprintf(fp, "\ti0 = max(((((simd_i32&) x) & simd_i32(0x7F800000)) >> int(23)) - simd_i32(127), simd_i32(0));\n");
+	 fprintf(fp, "\ti1 = i0 + simd_i32(%i);\n", M);
+	 fprintf(fp, "\tx -= x0.permute(i0);\n");
+	 fprintf(fp, "\ty = coeff[%i].permute(i0);\n", N / 2 - 1);
+	 for (int n = N - 3; n >= 0; n -= 2) {
+	 fprintf(fp, "\tc1 = coeff[%i].permute(i1);\n", n / 2);
+	 fprintf(fp, "\tc0 = coeff[%i].permute(i0);\n", n / 2);
+	 fprintf(fp, "\ty = fma(y, x, c1);\n");
+	 fprintf(fp, "\ty = fma(y, x, c0);\n");
+	 }
+	 fprintf(fp, "\ty *= e * rng;\n");
+	 fprintf(fp, "\treturn fma(simd_f32(1) - neg, y, neg * (simd_f32(2) - y));\n");
+	 fprintf(fp, "}\n");
 
-	}*/
+	 }*/
 	/* erfc */
 	{
 
@@ -993,7 +1099,6 @@ void double_funcs(FILE* fp) {
 		 fprintf(fp, "\treturn exp2(a) * exp2(b);\n");
 		 fprintf(fp, "}\n\n");*/
 	}
-
 
 	/* erfc */
 	{

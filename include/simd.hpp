@@ -445,6 +445,7 @@ public:
 	friend simd_f32 min(simd_f32, simd_f32);
 	friend simd_f32 blend(simd_f32, simd_f32, simd_i32);
 	friend simd_f32 frexp(simd_f32, simd_i32*);
+	friend class simd_f32_2;
 	friend class simd_i32;
 };
 
@@ -452,7 +453,8 @@ simd_f32 log10(simd_f32);
 simd_f32 tgamma(simd_f32);
 simd_f32 log2(simd_f32);
 simd_f32 log(simd_f32);
-simd_f32 cos(simd_f32);
+simd_f32 sin(simd_f32);
+simd_f32 tan(simd_f32);
 simd_f32 exp(simd_f32);
 simd_f32 expm1(simd_f32);
 simd_f32 erfc(simd_f32);
@@ -615,14 +617,6 @@ inline simd_f32 ldexp(simd_f32 x, simd_i32 e) {
 	i = i | e;
 	x = (simd_f32&) i;
 	return x;
-}
-
-inline simd_f32 sin(simd_f32 x) {
-	return cos(x - simd_f32(M_PI / 2.0));
-}
-
-inline simd_f32 tan(simd_f32 x) {
-	return sin(x) / cos(x);
 }
 
 inline simd_f32 modf(simd_f32 x, simd_f32* i) {
@@ -1306,6 +1300,99 @@ public:
 	}
 
 };
+
+struct simd_f32_2 {
+	simd_f32 x;
+	simd_f32 y;
+public:
+	static inline simd_f32_2 quick_two_sum(simd_f32 a_, simd_f32 b_) {
+		simd_f32_2 r;
+		volatile __m256 a = a_.v;
+		volatile __m256 b = b_.v;
+		volatile __m256 s = _mm256_add_ps(a, b);
+		volatile __m256 tmp = _mm256_sub_ps(s, a);
+		volatile __m256 e = _mm256_sub_ps(b, tmp);
+		r.x.v = s;
+		r.y.v = e;
+		return r;
+	}
+	static inline simd_f32_2 two_sum(simd_f32 a_, simd_f32 b_) {
+		simd_f32_2 r;
+		volatile __m256 a = a_.v;
+		volatile __m256 b = b_.v;
+		volatile __m256 s = _mm256_add_ps(a, b);
+		volatile __m256 v = _mm256_sub_ps(s, a);
+		volatile __m256 tmp1 = _mm256_sub_ps(s, v);
+		volatile __m256 tmp2 = _mm256_sub_ps(a, tmp1);
+		volatile __m256 tmp3 = _mm256_sub_ps(b, v);
+		volatile __m256 e = _mm256_add_ps(tmp2, tmp3);
+		r.x.v = s;
+		r.y.v = e;
+		return r;
+	}
+	static inline simd_f32_2 two_product(simd_f32 a_, simd_f32 b_) {
+		simd_f32_2 r;
+		const static float zero = 0.0;
+		volatile __m256 z = _mm256_broadcast_ss(&zero);
+		volatile __m256 a = a_.v;
+		volatile __m256 b = b_.v;
+		volatile __m256 xx = _mm256_mul_ps(a, b);
+		volatile __m256 zz = _mm256_sub_ps(z, xx);
+		volatile __m256 yy = _mm256_fmadd_ps(a, b, zz);
+		r.x.v = xx;
+		r.y.v = yy;
+		return r;
+	}
+	inline simd_f32_2& operator=(simd_f32 a) {
+		const static float zero = 0.0;
+		x = a;
+		y.v = _mm256_broadcast_ss(&zero);
+		return *this;
+	}
+	inline simd_f32_2(simd_f32 a) {
+		*this = a;
+	}
+	inline simd_f32_2() {
+	}
+	inline operator simd_f32() const {
+		return x + y;
+	}
+	inline simd_f32_2 operator+(simd_f32_2 other) const {
+		simd_f32_2 s, t;
+		s = two_sum(x, other.x);
+		t = two_sum(y, other.y);
+		s.y += t.x;
+		s = quick_two_sum(s.x, s.y);
+		s.y += t.y;
+		s = quick_two_sum(s.x, s.y);
+		return s;
+	}
+	inline simd_f32_2 operator*(simd_f32_2 other) const {
+		simd_f32_2 p;
+		p = two_product(x, other.x);
+		p.y += x * other.y;
+		p.y += y * other.x;
+		p = quick_two_sum(p.x, p.y);
+		return p;
+	}
+	inline simd_f32_2 operator-() const {
+		simd_f32_2 r;
+		r.x = -x;
+		r.y = -y;
+		return r;
+	}
+	inline simd_f32_2 operator-(simd_f32_2 other) const {
+		return *this + -other;
+	}
+
+};
+simd_f32 cos(simd_f32 x);
+
+/*inline simd_f32 cos(simd_f32 x) {
+	auto X = simd_f32_2::two_sum(x, simd_f32(-M_PI / 2.0));
+	return -(sin(X.x) + sin(x) * X.y);
+
+}*/
 
 }
 
