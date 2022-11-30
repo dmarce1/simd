@@ -457,6 +457,7 @@ simd_f32 sin(simd_f32);
 simd_f32 cos(simd_f32 x);
 
 simd_f32 exp(simd_f32);
+simd_f32 exp2(simd_f32);
 simd_f32 expm1(simd_f32);
 simd_f32 erfc(simd_f32);
 simd_f32 erf(simd_f32);

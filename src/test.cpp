@@ -384,15 +384,15 @@ int main() {
 	double max_err = 0.0;
 	std::vector<double> errs;
 
-	for (double r = -10.0; r < 10.0; r += rand1() * 1e-3) {
-		double a = atan(simd_f64(r))[0];
-		double b = atan(r);
+	for (float r = -120.0; r < 120.0; r += 1.0e-2) {
+		float a = exp2(simd_f32(r))[0];
+		float b = exp2(r);
 		max_err = std::max(max_err, fabs((a - b) / a));
 		errs.push_back(fabs((a - b) / a));
-		fprintf(fp, "%.10e %.10e %.10e %.10e\n", r, a, b, (a - b) / a / std::numeric_limits<double>::epsilon());
+		fprintf(fp, "%.10e %.10e %.10e %.10e\n", r, a, b, (a - b) / a / std::numeric_limits<float>::epsilon());
 	}
 	std::sort(errs.begin(), errs.end());
-	printf("%e %e\n", max_err / std::numeric_limits<double>::epsilon(), errs[99 * errs.size() / 100] / std::numeric_limits<double>::epsilon());
+	printf("%e %e\n", max_err / std::numeric_limits<float>::epsilon(), errs[99 * errs.size() / 100] / std::numeric_limits<float>::epsilon());
 	fclose(fp);
 //	return 0;
 	for (double x = 1.0; x < 2.0; x += 0.01) {
@@ -427,6 +427,11 @@ int main() {
 	printf("\nSingle Precision\n");
 	printf("name   speed        avg err      max err\n");
 
+	TEST1(float, simd_f32, exp, expf, exp, -86.0, 86.0, true);
+	TEST1(float, simd_f32, exp2, exp2f, exp2, -125.0, 125.0, true);
+	TEST1(float, simd_f32, erf, erff, erf, -7, 7, true);
+	TEST1(float, simd_f32, erfc, erfcf, erfc, -8.9, 8.9, true);
+
 	TEST1(float, simd_f32, sin, sinf, sin, -2 * M_PI, 2 * M_PI, true);
 	TEST1(float, simd_f32, cos, cosf, cos, -2 * M_PI, 2 * M_PI, true);
 	TEST1(float, simd_f32, tan, tanf, tan, -2 * M_PI, 2 * M_PI, true);
@@ -443,19 +448,21 @@ int main() {
 	 TEST1(float, simd_f32, asinh, asinhf, asinh, .001, 10, true);
 	 TEST1(float, simd_f32, atanh, atanhf, atanh, 0.001, 0.999, true);
 
-	 TEST1(float, simd_f32, erfc, erfcf, erfc, -8.9, 8.9, true);
 	 TEST1(float, simd_f32, expm1, expm1f, expm1, -2.0, 2.0, true);
 	 TEST1(float, simd_f32, cbrt, cbrtf, cbrt, 1.0 / 4000, 4000, true);
-	 TEST1(float, simd_f32, erf, erff, erf, -7, 7, true);
 	 TEST1(float, simd_f32, tgamma, tgammaf, tgamma, -.99, -0.01, true);
 	 TEST2(float, simd_f32, pow, powf, pow, 1e-3, 1e3, .01, 10, true);
 	 TEST1(float, simd_f32, log, logf, log, exp(-1), exp(40), true);
 	 TEST1(float, simd_f32, sqrt, sqrtf, sqrt, 0, std::numeric_limits<int>::max(), true);
-	 TEST1(float, simd_f32, exp, expf, exp, -86.0, 86.0, true);
 	 TEST1(float, simd_f32, cvt, cvt32_ref, cvt32_test, 1, +10000000, true);*/
 
 	printf("\nDouble Precision\n");
 	printf("name   speed        avg err      max err\n");
+
+	TEST1(double, simd_f64, exp, exp, exp, -600.0, 600.0, true);
+	TEST1(double, simd_f64, exp2, exp2, exp2, -1000.0, 1000.0, true);
+	TEST1(double, simd_f64, erf, erf, erf, -9, 9, true);
+	TEST1(double, simd_f64, erfc, erfc, erfc, -25.0, 25.0, true);
 
 	TEST1(double, simd_f64, sin, sin, sin, -2.0 * M_PI, 2.0 * M_PI, true);
 	TEST1(double, simd_f64, cos, cos, cos, -2.0 * M_PI, 2.0 * M_PI, true);
@@ -466,14 +473,11 @@ int main() {
 	TEST1(double, simd_f64, atan, atan, atan, -10.0, 10.0, true);
 
 	/*	TEST1(double, simd_f64, exp2, exp2, exp2, -1000.0, 1000.0, true);
-	 TEST1(double, simd_f64, exp, exp, exp, -600.0, 600.0, true);
-	 TEST1(double, simd_f64, erfc, erfc, erfc, -25.0, 25.0, true);
 	 TEST1(double, simd_f64, acosh, acosh, acosh, 1.001, 10.0, true);
 	 TEST1(double, simd_f64, asinh, asinh, asinh, .001, 10, true);
 	 TEST1(double, simd_f64, atanh, atanh, atanh, 0.001, 0.999, true);
 	 TEST1(double, simd_f64, expm1, expm1, expm1, -2.0, 2.0, true);
 	 TEST1(double, simd_f64, cbrt, cbrt, cbrt, 1.0 / 4000, 4000, true);
-	 TEST1(double, simd_f64, erf, erf, erf, -9, 9, true);
 	 TEST1(double, simd_f64, tgamma, tgamma, tgamma, -.99, -0.01, true);
 	 TEST1(double, simd_f64, cosh, cosh, cosh, -10.0, 10.0, true);
 	 TEST1(double, simd_f64, sinh, sinh, sinh, 0.01, 10.0, true);

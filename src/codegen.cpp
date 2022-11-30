@@ -475,9 +475,40 @@ void float_funcs(FILE* fp) {
 		fprintf(fp, "\tsimd_f32 x0, y, zero;\n");
 		fprintf(fp, "\tsimd_i32 i;\n");
 		fprintf(fp, "\tx = max(simd_f32(-87), min(simd_f32(87), x));\n");
-		fprintf(fp, "\tx0 = round(x * simd_f32(%.20e));\n", 1.0 / M_LN2);
-		fprintf(fp, "\tx -= x0 * simd_f32(%.20e);\n", M_LN2);
-		fprintf(fp, "\ty = simd_f32(%.20e);\n", c0[N - 1]);
+		fprintf(fp, "\tx0 = round(x * simd_f32(%.9e));\n", 1.0 / M_LN2);
+		fprintf(fp, "\tx -= x0 * simd_f32(%.9e);\n", M_LN2);
+		fprintf(fp, "\ty = simd_f32(%.9e);\n", c0[N - 1]);
+		for (int n = N - 2; n >= 0; n--) {
+			fprintf(fp, "\ty = fma(x, y, simd_f32(%.9e));\n", c0[n]);
+		}
+		fprintf(fp, "\ti = (simd_i32(x0) + simd_i32(127)) << int(23);\n");
+		fprintf(fp, "\ty *= (simd_f32&) i;\n");
+		fprintf(fp, "\treturn y;\n");
+		fprintf(fp, "}\n\n");
+	}
+
+	{/* exp2 */
+		constexpr int N = 9;
+		double c0[N];
+		int nf = 1;
+		for (int n = 0; n < N; n++) {
+			c0[n] = 1.0 / nf;
+			nf *= (n + 1);
+		}
+		double log2 = log(2);
+		double factor = 1.0;
+		for( int n = 0; n < N; n++) {
+			c0[n] *= factor;
+			factor *= log2;
+		}
+		fprintf(fp, "\n");
+		fprintf(fp, "simd_f32 exp2(simd_f32 x) {\n");
+		fprintf(fp, "\tsimd_f32 x0, y, zero;\n");
+		fprintf(fp, "\tsimd_i32 i;\n");
+		fprintf(fp, "\tx = max(simd_f32(-127), min(simd_f32(127), x));\n");
+		fprintf(fp, "\tx0 = round(x);\n");
+		fprintf(fp, "\tx -= x0;\n");
+		fprintf(fp, "\ty = simd_f32(%.9e);\n", c0[N - 1]);
 		for (int n = N - 2; n >= 0; n--) {
 			fprintf(fp, "\ty = fma(x, y, simd_f32(%.9e));\n", c0[n]);
 		}
