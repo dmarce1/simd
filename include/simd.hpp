@@ -489,7 +489,8 @@ inline simd_f32 sinh(simd_f32 x) {
 }
 
 inline simd_f32 cosh(simd_f32 x) {
-	return simd_f32(0.5) * (exp(x) + exp(-x));
+	const auto z = exp(x);
+	return (simd_f32(0.5) * z + simd_f32(0.5) / z);
 }
 
 inline simd_f32 tanh(simd_f32 x) {
