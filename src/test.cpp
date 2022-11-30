@@ -453,12 +453,16 @@ int main() {
 		return double(i);
 	};
 
+	TEST1(float, simd_f32, log1p, log1pf, log1p, exp(-3), exp(3), true);
+	TEST1(float, simd_f64, log1p, log1p, log1p, exp(-3), exp(3), true);
+
 	printf("Testing SIMD Functions\n");
 	printf("\nSingle Precision\n");
 	printf("name   speed        avg err      max err\n");
 
 	TEST1(float, simd_f32, exp, expf, exp, -86.0, 86.0, true);
 	TEST1(float, simd_f32, exp2, exp2f, exp2, -125.0, 125.0, true);
+	TEST1(float, simd_f32, expm1, expm1f, expm1, -2.0, 2.0, true);
 	TEST1(float, simd_f32, log, logf, log, exp(-1), exp(40), true);
 	TEST1(float, simd_f32, log2, log2f, log2, 0.00001, 100000, true);
 	TEST1(float, simd_f32, erf, erff, erf, -7, 7, true);
@@ -479,11 +483,11 @@ int main() {
 	 TEST1(float, simd_f32, acosh, acoshf, acosh, 1.001, 10.0, true);
 	 TEST1(float, simd_f32, asinh, asinhf, asinh, .001, 10, true);
 	 TEST1(float, simd_f32, atanh, atanhf, atanh, 0.001, 0.999, true);
+	 TEST2(float, simd_f32, pow, powf, pow, 1e-3, 1e3, .01, 10, true);
+	 TEST2(double, simd_f64, pow, pow, pow, 1e-3, 1e3, .01, 10, true);
 
-	 TEST1(float, simd_f32, expm1, expm1f, expm1, -2.0, 2.0, true);
 	 TEST1(float, simd_f32, cbrt, cbrtf, cbrt, 1.0 / 4000, 4000, true);
 	 TEST1(float, simd_f32, tgamma, tgammaf, tgamma, -.99, -0.01, true);
-	 TEST2(float, simd_f32, pow, powf, pow, 1e-3, 1e3, .01, 10, true);
 	 TEST1(float, simd_f32, sqrt, sqrtf, sqrt, 0, std::numeric_limits<int>::max(), true);
 	 TEST1(float, simd_f32, cvt, cvt32_ref, cvt32_test, 1, +10000000, true);*/
 
@@ -492,6 +496,7 @@ int main() {
 
 	TEST1(double, simd_f64, exp, exp, exp, -600.0, 600.0, true);
 	TEST1(double, simd_f64, exp2, exp2, exp2, -1000.0, 1000.0, true);
+	TEST1(double, simd_f64, expm1, expm1, expm1, -2.0, 2.0, true);
 	TEST1(double, simd_f64, log, log, log, exp(-1), exp(40), true);
 	TEST1(double, simd_f64, log2, log2, log2, .0001, 100000, true);
 	TEST1(double, simd_f64, erf, erf, erf, -9, 9, true);
@@ -509,13 +514,11 @@ int main() {
 	 TEST1(double, simd_f64, acosh, acosh, acosh, 1.001, 10.0, true);
 	 TEST1(double, simd_f64, asinh, asinh, asinh, .001, 10, true);
 	 TEST1(double, simd_f64, atanh, atanh, atanh, 0.001, 0.999, true);
-	 TEST1(double, simd_f64, expm1, expm1, expm1, -2.0, 2.0, true);
 	 TEST1(double, simd_f64, cbrt, cbrt, cbrt, 1.0 / 4000, 4000, true);
 	 TEST1(double, simd_f64, tgamma, tgamma, tgamma, -.99, -0.01, true);
 	 TEST1(double, simd_f64, cosh, cosh, cosh, -10.0, 10.0, true);
 	 TEST1(double, simd_f64, sinh, sinh, sinh, 0.01, 10.0, true);
 	 TEST1(double, simd_f64, tanh, tanh, tanh, 0.01, 10.0, true);
-	 TEST2(double, simd_f64, pow, pow, pow, 1e-3, 1e3, .01, 10, true);
 	 TEST1(double, simd_f64, sqrt, sqrt, sqrt, 0, std::numeric_limits<long long>::max(), true);
 	 TEST1(double, simd_f64, cvt, cvt64_ref, cvt64_test, 1LL, +1000000000LL, true);*/
 

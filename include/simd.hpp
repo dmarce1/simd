@@ -462,6 +462,7 @@ simd_f32 expm1(simd_f32);
 simd_f32 erfc(simd_f32);
 simd_f32 erf(simd_f32);
 simd_f32 cbrt(simd_f32);
+simd_f32 log1p(simd_f32);
 simd_f32 pow(simd_f32 y, simd_f32 x);
 simd_f32 atan(simd_f32);
 simd_f32 asin(simd_f32);
@@ -513,7 +514,7 @@ inline simd_f32 acosh(simd_f32 x) {
 
 
 inline simd_f32 pow(simd_f32 y, simd_f32 x) {
-	return exp(x * log(y));
+	return exp2(x * log2(y));
 }
 
 inline simd_f32 max(simd_f32 a, simd_f32 b) {
@@ -1058,9 +1059,13 @@ simd_f64 expm1(simd_f64);
 simd_f64 erfc(simd_f64);
 simd_f64 erf(simd_f64);
 simd_f64 cbrt(simd_f64);
+simd_f64 log1p(simd_f64);
 
 inline simd_f64 pow(simd_f64 y, simd_f64 x) {
-	return exp2(x * log2(y));
+	auto log2y = log2(y);
+	auto xxx = x * log2y;
+	auto yyy = fma(x, log2y, -xxx);
+	return exp2(xxx)*exp2(yyy);
 }
 
 simd_f64 acos(simd_f64 x);

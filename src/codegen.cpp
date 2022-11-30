@@ -433,32 +433,43 @@ void float_funcs(FILE* fp) {
 
 	/* expm1 */
 	{
-		constexpr int N = 9;
-		double c0[N];
-		int nf = 1;
-		for (int n = 0; n < N; n++) {
-			c0[n] = 1.0 / nf;
-			nf *= (n + 1);
+		constexpr int N = 8;
+		int factorial[N];
+		factorial[0] = 1;
+		factorial[1] = 1;
+		for (int n = 2; n < N; n++) {
+			factorial[n] = factorial[n - 1] * n;
 		}
 		fprintf(fp, "\n");
 		fprintf(fp, "simd_f32 expm1(simd_f32 x) {\n");
-		fprintf(fp, "\tsimd_f32 x0, x1, y, zero;\n");
-		fprintf(fp, "\tsimd_i32 i, s;\n");
-		fprintf(fp, "\tx = max(simd_f32(-87), min(simd_f32(87), x));\n");
-		fprintf(fp, "\ts = (x < simd_f32(0.3333333)) && (x > simd_f32(-0.3333333));\n");
-		fprintf(fp, "\tx1 = x;\n");
-		fprintf(fp, "\tx0 = round(x * simd_f32(%.20e));\n", 1.0 / M_LN2);
-		fprintf(fp, "\tx -= x0 * simd_f32(%.20e);\n", M_LN2);
-		fprintf(fp, "\tx = blend(x, x1, s);\n");
-		fprintf(fp, "\ty = simd_f32(%.20e);\n", c0[N - 1]);
+		fprintf(fp, "\tsimd_f32 y;\n");
+		fprintf(fp, "\tsimd_i32 l;\n");
+		fprintf(fp, "\tl = abs(x) < simd_f32(1.0/3.0);\n");
+		fprintf(fp, "\ty = simd_f32(%.9e);\n", 1.0 / factorial[N - 1]);
 		for (int n = N - 2; n >= 1; n--) {
-			fprintf(fp, "\ty = fma(x, y, simd_f32(%.9e));\n", c0[n]);
+			fprintf(fp, "\ty = fma(y, x, simd_f32(%.9e));\n", 1.0 / factorial[n]);
 		}
-		fprintf(fp, "\ty = fma(x, y, blend(simd_f32(1), simd_f32(0), s));\n");
-		fprintf(fp, "\ti = (simd_i32(x0) + simd_i32(127)) << int(23);\n");
-		fprintf(fp, "\tx0 = (simd_f32&) i;\n");
-		fprintf(fp, "\ty *= blend(x0, simd_f32(1), s);\n");
-		fprintf(fp, "\ty -= blend(simd_f32(1), simd_f32(0), s);\n");
+		fprintf(fp, "\ty *= x;\n");
+		fprintf(fp, "\ty = blend(exp(x) - simd_f32(1), y, l);");
+		fprintf(fp, "\treturn y;\n");
+		fprintf(fp, "}\n\n");
+	}
+	/* log1p */
+	{
+		constexpr int N = 4;
+		fprintf(fp, "\n");
+		fprintf(fp, "simd_f32 log1p(simd_f32 x) {\n");
+		fprintf(fp, "\tsimd_f32 y, z, z2;\n");
+		fprintf(fp, "\tsimd_i32 l;\n");
+		fprintf(fp, "\tl = abs(x) < simd_f32(1.0/3.0);\n");
+		fprintf(fp, "\tz = x / (x + simd_f32(2));\n");
+		fprintf(fp, "\tz2 = z * z;\n");
+		fprintf(fp, "\ty = simd_f32(%.9e);\n", 2.0 / (2 * (N - 1) + 1));
+		for (int n = N - 2; n >= 0; n--) {
+			fprintf(fp, "\ty = fma(y, z2, simd_f32(%.9e));\n", 2.0 / (2 * n + 1));
+		}
+		fprintf(fp, "\ty *= z;\n");
+		fprintf(fp, "\ty = blend(log(x + simd_f32(1)), y, l);");
 		fprintf(fp, "\treturn y;\n");
 		fprintf(fp, "}\n\n");
 	}
@@ -987,34 +998,47 @@ void double_funcs(FILE* fp) {
 		fprintf(fp, "\treturn y;\n");
 		fprintf(fp, "}\n");
 	}
+	/* log1p */
+	{
+		constexpr int N = 8;
+		fprintf(fp, "\n");
+		fprintf(fp, "simd_f64 log1p(simd_f64 x) {\n");
+		fprintf(fp, "\tsimd_f64 y, z, z2;\n");
+		fprintf(fp, "\tsimd_i64 l;\n");
+		fprintf(fp, "\tl = abs(x) < simd_f64(1.0/3.0);\n");
+		fprintf(fp, "\tz = x / (x + simd_f64(2));\n");
+		fprintf(fp, "\tz2 = z * z;\n");
+		fprintf(fp, "\ty = simd_f64(%.9e);\n", 2.0 / (2 * (N - 1) + 1));
+		for (int n = N - 2; n >= 0; n--) {
+			fprintf(fp, "\ty = fma(y, z2, simd_f64(%.9e));\n", 2.0 / (2 * n + 1));
+		}
+		fprintf(fp, "\ty *= z;\n");
+		fprintf(fp, "\ty = blend(log(x + simd_f64(1)), y, l);");
+		fprintf(fp, "\treturn y;\n");
+		fprintf(fp, "}\n\n");
+	}
 
 	{
-		constexpr int N = 13;
-		hiprec_real c0[N];
-		int nf = 1;
-		for (int n = 0; n < N; n++) {
-			c0[n] = hiprec_real(1) / hiprec_real(nf);
-			nf *= (n + 1);
+		/* expm1 */
+
+		constexpr int N = 14;
+		int factorial[N];
+		factorial[0] = 1;
+		factorial[1] = 1;
+		for (int n = 2; n < N; n++) {
+			factorial[n] = factorial[n - 1] * n;
 		}
 		fprintf(fp, "\n");
 		fprintf(fp, "simd_f64 expm1(simd_f64 x) {\n");
-		fprintf(fp, "\tsimd_f64 x0, x1, y, zero;\n");
-		fprintf(fp, "\tsimd_i64 i, s;\n");
-		fprintf(fp, "\tx = max(simd_f64(-710), min(simd_f64(710), x));\n");
-		fprintf(fp, "\ts = (x < simd_f64(0.333333333333333333)) && (x > simd_f64(-0.333333333333333333));\n");
-		fprintf(fp, "\tx1 = x;\n");
-		fprintf(fp, "\tx0 = round(x * simd_f64(%.20e));\n", 1.0 / M_LN2);
-		fprintf(fp, "\tx -= x0 * simd_f64(%.20e);\n", M_LN2);
-		fprintf(fp, "\tx = blend(x, x1, s);\n");
-		fprintf(fp, "\ty = simd_f64(%.20e);\n", (double) c0[N - 1]);
+		fprintf(fp, "\tsimd_f64 y;\n");
+		fprintf(fp, "\tsimd_i64 l;\n");
+		fprintf(fp, "\tl = abs(x) < simd_f64(1.0/3.0);\n");
+		fprintf(fp, "\ty = simd_f64(%.17e);\n", 1.0 / factorial[N - 1]);
 		for (int n = N - 2; n >= 1; n--) {
-			fprintf(fp, "\ty = fma(x, y, simd_f64(%.17e));\n", (double) c0[n]);
+			fprintf(fp, "\ty = fma(y, x, simd_f64(%.17e));\n", 1.0 / factorial[n]);
 		}
-		fprintf(fp, "\ty = fma(x, y, blend(simd_f64(1), simd_f64(0), s));\n");
-		fprintf(fp, "\ti = (simd_i64(x0) + simd_i64(1023)) << (long long)(52);\n");
-		fprintf(fp, "\tx0 = (simd_f64&) i;\n");
-		fprintf(fp, "\ty *= blend(x0, simd_f64(1), s);\n");
-		fprintf(fp, "\ty -= blend(simd_f64(1), simd_f64(0), s);\n");
+		fprintf(fp, "\ty *= x;\n");
+		fprintf(fp, "\ty = blend(exp(x) - simd_f64(1), y, l);");
 		fprintf(fp, "\treturn y;\n");
 		fprintf(fp, "}\n\n");
 	}
