@@ -454,7 +454,8 @@ simd_f32 tgamma(simd_f32);
 simd_f32 log2(simd_f32);
 simd_f32 log(simd_f32);
 simd_f32 sin(simd_f32);
-simd_f32 tan(simd_f32);
+simd_f32 cos(simd_f32 x);
+
 simd_f32 exp(simd_f32);
 simd_f32 expm1(simd_f32);
 simd_f32 erfc(simd_f32);
@@ -462,10 +463,7 @@ simd_f32 erf(simd_f32);
 simd_f32 cbrt(simd_f32);
 simd_f32 pow(simd_f32 y, simd_f32 x);
 simd_f32 asin(simd_f32);
-
-inline simd_f32 acos(simd_f32 x) {
-	return simd_f32(M_PI_2) - asin(x);
-}
+simd_f32 acos(simd_f32 x);
 
 inline simd_f32 atan(simd_f32 x) {
 	simd_f32 z;
@@ -624,6 +622,11 @@ inline simd_f32 modf(simd_f32 x, simd_f32* i) {
 	x -= *i;
 	return x;
 }
+
+inline simd_f32 tan(simd_f32 x) {
+	return sin(x) / cos(x);
+}
+
 
 class simd_i64;
 class simd_f64;
@@ -1060,9 +1063,7 @@ inline simd_f64 pow(simd_f64 y, simd_f64 x) {
 	return exp2(x * log2(y));
 }
 
-inline simd_f64 acos(simd_f64 x) {
-	return simd_f64(M_PI_2) - asin(x);
-}
+simd_f64 acos(simd_f64 x);
 
 inline simd_f64 atan(simd_f64 x) {
 	simd_f64 z;
@@ -1392,7 +1393,6 @@ public:
 	}
 
 };
-simd_f32 cos(simd_f32 x);
 
 /*inline simd_f32 cos(simd_f32 x) {
 	auto X = simd_f32_2::two_sum(x, simd_f32(-M_PI / 2.0));

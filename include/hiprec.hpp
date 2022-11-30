@@ -117,6 +117,7 @@ public:
 	friend hiprec_real sqrt(hiprec_real);
 	friend hiprec_real exp(hiprec_real);
 	friend hiprec_real exp2(hiprec_real);
+	friend hiprec_real acos(hiprec_real);
 	friend hiprec_real asin(hiprec_real);
 	friend hiprec_real gamma(hiprec_real);
 	friend hiprec_real log(hiprec_real);
@@ -125,11 +126,18 @@ public:
 	friend hiprec_real cos(hiprec_real);
 	friend hiprec_real sin(hiprec_real);
 	friend hiprec_real pow(hiprec_real, hiprec_real);
+	friend hiprec_real copysign(hiprec_real, hiprec_real);
 };
 
 hiprec_real pow(hiprec_real a, hiprec_real b) {
 	hiprec_real c;
 	mpfr_pow(c.q, a.q, b.q, MPFR_RNDN);
+	return c;
+}
+
+hiprec_real copysign(hiprec_real a, hiprec_real b) {
+	hiprec_real c;
+	mpfr_copysign(c.q, a.q, b.q, MPFR_RNDN);
 	return c;
 }
 
@@ -184,6 +192,12 @@ hiprec_real gamma(hiprec_real a) {
 hiprec_real asin(hiprec_real a) {
 	hiprec_real b;
 	mpfr_asin(b.q, a.q, MPFR_RNDN);
+	return b;
+}
+
+hiprec_real acos(hiprec_real a) {
+	hiprec_real b;
+	mpfr_acos(b.q, a.q, MPFR_RNDN);
 	return b;
 }
 
