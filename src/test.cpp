@@ -60,10 +60,10 @@ test_result_t test_function(const F1& ref, const F2& test, T a, T b, bool relerr
 	static V* ytest;
 	bool flag = true;
 	if (xref == nullptr) {
-		flag = flag && (posix_memalign((void**) &xref, 32, sizeof(T) * size * N) != 0);
-		flag = flag && (posix_memalign((void**) &xtest, 32, sizeof(V) * N) != 0);
-		flag = flag && (posix_memalign((void**) &yref, 32, sizeof(T) * size * N) != 0);
-		flag = flag && (posix_memalign((void**) &ytest, 32, sizeof(V) * N) != 0);
+		flag = (posix_memalign((void**) &xref, 32, sizeof(T) * size * N) != 0) && flag;
+		flag = (posix_memalign((void**) &xtest, 32, sizeof(V) * N) != 0) && flag;
+		flag = (posix_memalign((void**) &yref, 32, sizeof(T) * size * N) != 0) && flag;
+		flag = (posix_memalign((void**) &ytest, 32, sizeof(V) * N) != 0) && flag;
 	}
 
 	int nthreads = 1;
@@ -143,12 +143,12 @@ test_result_t test_function(const F1& ref, const F2& test, T a0, T b0, T a1, T b
 	static V* ztest;
 	bool flag = true;
 	if (xref == nullptr) {
-		flag = flag && (posix_memalign((void**) &xref, 32, sizeof(T) * size * N) != 0);
-		flag = flag && (posix_memalign((void**) &xtest, 32, sizeof(V) * N) != 0);
-		flag = flag && (posix_memalign((void**) &yref, 32, sizeof(T) * size * N) != 0);
-		flag = flag && (posix_memalign((void**) &ytest, 32, sizeof(V) * N) != 0);
-		flag = flag && (posix_memalign((void**) &zref, 32, sizeof(T) * size * N) != 0);
-		flag = flag && (posix_memalign((void**) &ztest, 32, sizeof(V) * N) != 0);
+		flag = (posix_memalign((void**) &xref, 32, sizeof(T) * size * N) != 0) && flag;
+		flag = (posix_memalign((void**) &xtest, 32, sizeof(V) * N) != 0) && flag;
+		flag = (posix_memalign((void**) &yref, 32, sizeof(T) * size * N) != 0) && flag;
+		flag = (posix_memalign((void**) &ytest, 32, sizeof(V) * N) != 0) && flag;
+		flag = (posix_memalign((void**) &zref, 32, sizeof(T) * size * N) != 0) && flag;
+		flag = (posix_memalign((void**) &ztest, 32, sizeof(V) * N) != 0) && flag;
 	}
 	int nthreads = 1;
 	for (int i = 0; i < size * N; i++) {
@@ -245,133 +245,110 @@ test_result_t test_function(const F1& ref, const F2& test, T a0, T b0, T a1, T b
 namespace simd {
 }
 
-void cordic(double theta_, double& sintheta, double& costheta) {
-	constexpr int N = 9;
+void cordic(double theta, double& sintheta, double& costheta) {
+	constexpr int N = 28;
 	static double dphi1[N];
 	static double dphi2[N];
+	static double dphi3[N];
 	static double taneps[N];
 	static double twopiinv;
 	static double factor;
 	static std::once_flag once;
+	static double dtheta1;
+	static double dtheta2;
+	static double dtheta3;
+	static hiprec_real pi_exact = hiprec_real(4) * atan(hiprec_real(1));
+	static double dbin = pi_exact * pow(hiprec_real(2), -hiprec_real(N));
 	std::call_once(once, []() {
 		hiprec_real factor_ = 1.0;
-		hiprec_real twopiinv_exact = hiprec_real(1) / (hiprec_real(8) * atan(hiprec_real(1)));
+		hiprec_real dtheta0 = hiprec_real(2) * pi_exact;
+		dtheta1 = dtheta0;
+		dtheta2 = dtheta0 - hiprec_real(dtheta1);
+		dtheta3 = dtheta0 - hiprec_real(dtheta1) - hiprec_real(dtheta2);
 		for( int n = 0; n < N; n++) {
-			double eps = pow(2.0, -n);
-			taneps[n] = eps;
-			hiprec_real phi0 = atan(hiprec_real(eps)) / (hiprec_real(4)*atan(hiprec_real(1)));
+			hiprec_real eps = pi_exact * pow(hiprec_real(2), -hiprec_real(n));
+			taneps[n] = tan(eps);
+			hiprec_real phi0 = eps;
 			dphi1[n] = phi0;
 			dphi2[n] = phi0 - hiprec_real(dphi1[n]);
-			factor_ *= hiprec_real(1) / sqrt(hiprec_real(1) + hiprec_real(eps) * hiprec_real(eps));
+			dphi3[n] = phi0 - hiprec_real(dphi1[n]) - hiprec_real(dphi2[n]);
+			if( n != 1 ) {
+				factor_ *= hiprec_real(1) / sqrt(hiprec_real(1) + tan(eps) * tan(eps));
+			}
 		}
 		factor = factor_;
-		twopiinv = twopiinv_exact;
 	});
-	double theta = theta_;
-	theta *= twopiinv;
-	theta -= std::round(theta);
-	theta *= 2.0;
-	if (theta > 0.5) {
-		theta = 1.0 - theta;
-	} else if (theta < -0.5) {
-		theta = -1.0 - theta;
-	}
+	int index = std::round(theta / dtheta1);
+	theta = std::fma(double(-index), dtheta3, std::fma(double(-index), dtheta2, std::fma(double(-index), dtheta1, theta)));
 	double x = 1.0;
 	double y = 0.0;
 	double phi1 = 0.0;
 	double phi2 = 0.0;
+	double phi3 = 0.0;
 	for (int n = 0; n < N; n++) {
 		double eps = taneps[n];
 		double x0 = x;
 		double y0 = y;
-		if (phi1 + phi2 < theta) {
-			x -= eps * y0;
-			y += eps * x0;
+		if (phi3 + phi2 + phi1 + dphi1[n] / 2.0 < theta) {
+			if (n == 1) {
+				std::swap(x, y);
+				y = -y;
+			} else {
+				x = std::fma(eps, -y0, x);
+				y = std::fma(eps, x0, y);
+			}
 			phi1 += dphi1[n];
 			phi2 += dphi2[n];
-		} else if (phi1 + phi2 > theta) {
-			x += eps * y0;
-			y -= eps * x0;
+			phi3 += dphi3[n];
+		} else if (phi3 + phi2 + phi1 - dphi1[n] / 2.0 > theta) {
+			if (n == 1) {
+				std::swap(x, y);
+				x = -x;
+			} else {
+				x = std::fma(eps, y0, x);
+				y = std::fma(eps, -x0, y);
+			}
 			phi1 -= dphi1[n];
 			phi2 -= dphi2[n];
+			phi3 -= dphi3[n];
 		}
 	}
 	x = (double) x * factor;
 	y = (double) y * factor;
-	volatile double eps = theta - phi1;
-	eps -= phi2;
-	eps *= M_PI;
-	double eps2 = eps * eps;
-	double se = 1.0 / 120.0;
-	se = std::fma(se, eps2, -1.0 / 6.0);
-	se = std::fma(se, eps2, 1.0);
-	se *= eps;
-	double ce = 1.0 / 24.0;
-	ce = std::fma(ce, eps2, -1.0 / 2.0);
-	ce = std::fma(ce, eps2, 0.0);
-	volatile auto tmp = y * ce + x * se;
-	sintheta = tmp + y;
-	tmp = x * ce - y * se;
-	costheta = tmp + x;
+	double eps = ((theta - phi1) - phi2) - phi3;
+	costheta = x;
+	sintheta = y;
+	sintheta = std::fma(eps, x, sintheta);
+	costheta = std::fma(eps, -y, costheta);
 }
 
-double sin_test(double theta) {
-	constexpr int N = 16 + 1;
-	constexpr int M = 12;
-
-
-	static double stable[N];
-	static double ctable[N];
-	static double sP0[N][M];
-	static double cP0[N][M];
+double cos_test(double theta) {
+	constexpr int N = 11;
 	static std::once_flag once;
-	static hiprec_real exact_pi = hiprec_real(4) * atan(hiprec_real(1));
-	static hiprec_real dtheta0 = hiprec_real(2) * exact_pi / hiprec_real(N - 1);
-	static double dtheta1;
-	static double dtheta2;
-	static double dtheta3;
-	static const auto remove_lsbs = [](double x ) {
-		unsigned long long i = (unsigned long long&) x;
-		i &= 0xFFFFFFFFFFFF0000;
-		x = (double&) i;
-		return x;
-	};
+	static double coeff[N];
+	static hiprec_real pi_exact = hiprec_real(4) * atan(hiprec_real(1));
+	static double pi1 = pi_exact;
+	static double pi2 = pi_exact - hiprec_real(pi1);
 	std::call_once(once, []() {
-		hiprec_real dtheta0 = hiprec_real(2) * exact_pi / hiprec_real(N - 1);
-		dtheta1 = dtheta0;
-		dtheta1 = remove_lsbs(dtheta1);
-		dtheta2 = dtheta0 - hiprec_real(dtheta1);
-		dtheta2 = remove_lsbs(dtheta2);
-		dtheta3 = dtheta0 - hiprec_real(dtheta1) - hiprec_real(dtheta2);
+		hiprec_real fac(-1);
 		for( int n = 0; n < N; n++) {
-			hiprec_real theta = -exact_pi + hiprec_real(n)/hiprec_real(N-1) * hiprec_real(2) * exact_pi;
-			stable[n] = sin(theta);
-			ctable[n] = cos(theta);
-			hiprec_real fac = hiprec_real(1);
-			for( int m = 0; m < M; m++) {
-				cP0[n][m] = cos(theta + hiprec_real(m) * exact_pi / hiprec_real(2)) / fac;
-				sP0[n][m] = sin(theta + hiprec_real(m) * exact_pi / hiprec_real(2)) / fac;
-				fac *= hiprec_real(m + 1);
-			}
+			coeff[n] = hiprec_real(1) / fac;
+			fac *= hiprec_real(2 * n + 3);
+			fac *= -hiprec_real(2 * n + 2);
 		}
 	});
-	int index = std::round(theta / dtheta1);
-	theta = std::fma(-double(index), dtheta3, std::fma(double(-index), dtheta2, std::fma(double(-index), dtheta1, theta)));
-	index += N / 2;
-	while (index >= N) {
-		index -= N - 1;
+	theta = abs(theta);
+	int i = std::floor(theta / M_PI_2);
+	i |= 1;
+	int sgn = -2 * (i / 2 - 2 * (i / 4)) + 1;
+	double x = sgn * std::fma(-double(i), pi2 * 0.5, std::fma(-double(i), pi1 * 0.5, theta));
+	double x2 = x * x;
+	double y = coeff[N - 1];
+	for (int n = N - 2; n >= 0; n--) {
+		y = std::fma(x2, y, coeff[n]);
 	}
-	while (index < 0) {
-		index += N - 1;
-	}
-	double x = theta;
-	double s = sP0[index][M - 1];
-	double c = cP0[index][M - 1];
-	for (int m = M - 2; m >= 0; m--) {
-		s = std::fma(s, x, sP0[index][m]);
-		c = std::fma(c, x, cP0[index][m]);
-	}
-	return s;
+	y *= x;
+	return y;
 }
 
 int main() {
@@ -381,9 +358,9 @@ int main() {
 	double max_err = 0.0;
 	std::vector<double> errs;
 
-	for (double r = -20 * M_PI; r <= 20 * M_PI; r += M_PI / 333.0) {
-		double a = sin_test(r);
-		double b = sin(hiprec_real(r));
+	for (double r = -6.0 * M_PI; r < 6.0 * M_PI; r += M_PI / 333.0) {
+		double a = cos(simd_f64(r))[0];
+		double b = std::cos(r);
 		max_err = std::max(max_err, fabs((a - b) / a));
 		errs.push_back(fabs((a - b) / a));
 		fprintf(fp, "%.10e %.10e %.10e %.10e\n", r, a, b, (a - b) / a / std::numeric_limits<double>::epsilon());
@@ -419,6 +396,10 @@ int main() {
 		int i = (long long)(x);
 		return double(i);
 	};
+
+	TEST1(double, simd_f64, cos, cos, cos, -2.0 * M_PI, 2.0 * M_PI, true);
+	TEST1(double, simd_f64, sin, sin, sin, -2.0 * M_PI, 2.0 * M_PI, true);
+	TEST1(double, simd_f64, tan, tan, tan, -2.0 * M_PI, 2.0 * M_PI, true);
 
 	printf("Testing SIMD Functions\n");
 	printf("\nSingle Precision\n");
@@ -472,9 +453,6 @@ int main() {
 	TEST2(double, simd_f64, pow, pow, pow, 1e-3, 1e3, .01, 10, true);
 	TEST1(double, simd_f64, log, log, log, exp(-1), exp(40), true);
 	TEST1(double, simd_f64, sqrt, sqrt, sqrt, 0, std::numeric_limits<long long>::max(), true);
-	TEST1(double, simd_f64, cos, cos, cos, -2.0 * M_PI, 2.0 * M_PI, false);
-	TEST1(double, simd_f64, sin, sin, sin, -2.0 * M_PI, 2.0 * M_PI, false);
-	TEST1(double, simd_f64, tan, tan, tan, -2.0 * M_PI, 2.0 * M_PI, true);
 	TEST1(double, simd_f64, cvt, cvt64_ref, cvt64_test, 1LL, +1000000000LL, true);
 
 	return (0);

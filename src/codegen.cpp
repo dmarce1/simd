@@ -672,6 +672,9 @@ void float_funcs(FILE* fp) {
 }
 void double_funcs(FILE* fp) {
 	include(fp, "../include/code64.hpp");
+
+
+	/* erf */
 	{
 		constexpr int M = 6;
 		static std::vector<double> co[M];
@@ -752,6 +755,8 @@ void double_funcs(FILE* fp) {
 		fprintf(fp, "\treturn s * y;\n");
 		fprintf(fp, "}\n");
 	}
+
+	/* tgamma */
 	{
 		constexpr int M = 4;
 		static std::vector<double> co[M];
@@ -831,6 +836,7 @@ void double_funcs(FILE* fp) {
 		fprintf(fp, "\treturn y;\n");
 		fprintf(fp, "}\n");
 	}
+	/* asin */
 	{
 		static std::vector<double> co1;
 		static std::vector<double> co2;
@@ -914,6 +920,7 @@ void double_funcs(FILE* fp) {
 		fprintf(fp, "\treturn s * y;\n");
 		fprintf(fp, "}\n");
 	}
+	/* log */
 	{
 		std::function<hiprec_real(hiprec_real)> func = [](hiprec_real x) {
 			static const auto c0 = hiprec_real(3) / (hiprec_real(2) * sqrt(hiprec_real(2)));
@@ -954,32 +961,59 @@ void double_funcs(FILE* fp) {
 		fprintf(fp, "\treturn log2(x) * simd_f64(%.17e);\n", (double) hiprec_real(1) / log2(hiprec_real(10)));
 		fprintf(fp, "}\n");
 	}
+	/* sin */
 	{
-		constexpr int N = 27;
-		polynomial c0;
-		long double coeff[N];
-		coeff[0] = jnl(0, 1.0L);
-		long double b = -2.0L;
-		auto Tn = Tns(2 * N);
-		for (int n = 1; n < N; n++) {
-			coeff[n] = b * jnl(2 * n, 1.0L);
-			b = -b;
-		}
+		constexpr int N = 11;
+		double coeff[N];
+		hiprec_real pi_exact = hiprec_real(4) * atan(hiprec_real(1));
+		double pi1 = pi_exact;
+		double pi2 = pi_exact - hiprec_real(pi1);
+		hiprec_real fac(1);
 		for (int n = 0; n < N; n++) {
-			c0 = poly_add(c0, poly_mul(poly_term(0, hiprec_real(coeff[n])), Tn[2 * n]));
+			coeff[n] = hiprec_real(1) / fac;
+			fac *= hiprec_real(2 * n + 2);
+			fac *= -hiprec_real(2 * n + 3);
 		}
-		const auto pi = 4.0L * atanl(1.0L);
-		fprintf(fp, "\n");
-		fprintf(fp, "simd_f64 cos(simd_f64 x) {\n");
-		fprintf(fp, "\tsimd_f64 p, y, sbig;\n");
-		fprintf(fp, "\tp = x * simd_f64(%.17e) - simd_f64(0.5);\n", double(1.0L / (2.0L * pi)));
-		fprintf(fp, "\tp -= floor(p);\n");
-		fprintf(fp, "\tp -= simd_f64(0.5);\n");
-		fprintf(fp, "\tx = p * p * simd_f64(%.17e);\n", double(4.0L * pi * pi));
-		fprintf(fp, "\ty = simd_f64(%.17e);\n", double(c0[N - 1]));
-		for (int n = N - 3; n >= 0; n -= 2) {
-			fprintf(fp, "\ty = fma(x, y, simd_f64(%.17e));\n", double(c0[n]));
+		fprintf(fp, "\nsimd_f64 cos(simd_f64 x) {\n");
+		fprintf(fp, "\tsimd_f64 x0, s, x2, y;\n");
+		fprintf(fp, "\tx = abs(x);\n");
+		fprintf(fp, "\tx0 = floor(x * simd_f64(%.17e));\n", 1.0 / M_PI);
+		fprintf(fp, "\ts = simd_f64(2) * (x0 - simd_f64(2) * floor(x0 * simd_f64(0.5))) - simd_f64(1);\n");
+		fprintf(fp, "\tx0 += simd_f64(0.5);\n");
+		fprintf(fp, "\tx = s * fma(-x0, simd_f64(%.17e), fma(-x0, simd_f64(%.17e), x));\n", pi2, pi1);
+		fprintf(fp, "\tx2 = x * x;\n");
+		fprintf(fp, "\ty = simd_f64(%.17e);\n", coeff[N-1]);
+		for( int n = N - 2; n >= 0; n--) {
+			fprintf(fp, "\ty = fma(x2, y, simd_f64(%.17e));\n", coeff[n]);
 		}
+		fprintf(fp, "\ty *= x;\n");
+		fprintf(fp, "\treturn y;\n");
+		fprintf(fp, "}\n");
+	}
+	/* sin */
+	{
+		constexpr int N = 11;
+		double coeff[N];
+		hiprec_real pi_exact = hiprec_real(4) * atan(hiprec_real(1));
+		double pi1 = pi_exact;
+		double pi2 = pi_exact - hiprec_real(pi1);
+		hiprec_real fac(1);
+		for (int n = 0; n < N; n++) {
+			coeff[n] = hiprec_real(1) / fac;
+			fac *= hiprec_real(2 * n + 2);
+			fac *= -hiprec_real(2 * n + 3);
+		}
+		fprintf(fp, "\nsimd_f64 sin(simd_f64 x) {\n");
+		fprintf(fp, "\tsimd_f64 x0, s, x2, y;\n");
+		fprintf(fp, "\tx0 = round(x * simd_f64(%.17e));\n", 1.0 / M_PI);
+		fprintf(fp, "\ts = -simd_f64(2) * (x0 - simd_f64(2) * floor(x0 * simd_f64(0.5))) + simd_f64(1);\n");
+		fprintf(fp, "\tx = s * fma(-x0, simd_f64(%.17e), fma(-x0, simd_f64(%.17e), x));\n", pi2, pi1);
+		fprintf(fp, "\tx2 = x * x;\n");
+		fprintf(fp, "\ty = simd_f64(%.17e);\n", coeff[N-1]);
+		for( int n = N - 2; n >= 0; n--) {
+			fprintf(fp, "\ty = fma(x2, y, simd_f64(%.17e));\n", coeff[n]);
+		}
+		fprintf(fp, "\ty *= x;\n");
 		fprintf(fp, "\treturn y;\n");
 		fprintf(fp, "}\n");
 	}

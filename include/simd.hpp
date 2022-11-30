@@ -899,6 +899,14 @@ public:
 		v[2] = (double) other[2];
 		v[3] = (double) other[3];
 	}
+	inline simd_f64 permute(simd_i64 indices) const {
+		CHECK_ALIGNMENT(this, 32);
+		simd_f64 result;
+		__m256i i = indices.v;
+		__m256d y = v;
+		result.v = __builtin_shuffle(v, i);
+		return result;
+	}
 	inline simd_f64& gather(const double* ptr, simd_i64 indices) {
 		CHECK_ALIGNMENT(this, 32);
 		v = _mm256_i64gather_pd(ptr, indices.v, sizeof(double));
@@ -1201,9 +1209,7 @@ inline simd_f64 tanh(simd_f64 x) {
 	return sinh(x) / cosh(x);
 }
 
-inline simd_f64 sin(simd_f64 x) {
-	return cos(x - simd_f64(M_PI / 2.0));
-}
+simd_f64 sin(simd_f64 x);
 
 inline simd_f64 tan(simd_f64 x) {
 	return sin(x) / cos(x);
