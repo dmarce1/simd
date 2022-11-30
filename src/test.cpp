@@ -374,6 +374,36 @@ float acos_test(float x) {
 	return y;
 }
 
+float log2_test(float x) {
+	constexpr int N = 5;
+	int i = std::ilogbf(x * sqrtf(2));
+	x = ldexp(x, -i);
+	printf("%e\n", x - 1.0);
+	float y = (x - 1.0) / (x + 1.0);
+	float y2 = y * y;
+	float z = 2.0 / (2 * (N - 1) + 1);
+	for (int n = N - 2; n >= 0; n--) {
+		z = fma(z, y2, 2.0 / (2 * n + 1) / log(2));
+	}
+	z *= y;
+	return z + i;
+}
+
+double log2_test(double x) {
+	constexpr int N = 10;
+	int i = std::ilogbf(x * sqrtf(2));
+	x = ldexp(x, -i);
+	printf("%e\n", x - 1.0);
+	double y = (x - 1.0) / (x + 1.0);
+	double y2 = y * y;
+	double z = 2.0 / (2 * (N - 1) + 1);
+	for (int n = N - 2; n >= 0; n--) {
+		z = fma(z, y2, 2.0 / (2 * n + 1) / log(2));
+	}
+	z *= y;
+	return z + i;
+}
+
 int main() {
 	double s, c;
 	//feenableexcept(FE_DIVBYZERO);
@@ -384,15 +414,15 @@ int main() {
 	double max_err = 0.0;
 	std::vector<double> errs;
 
-	for (float r = -120.0; r < 120.0; r += 1.0e-2) {
-		float a = exp2(simd_f32(r))[0];
-		float b = exp2(r);
+	for (double r = 1.0 / 8; r < 8; r *= (1.0 + .01 * rand1())) {
+		double a = log2(simd_f64(r))[0];
+		double b = log2(r);
 		max_err = std::max(max_err, fabs((a - b) / a));
 		errs.push_back(fabs((a - b) / a));
-		fprintf(fp, "%.10e %.10e %.10e %.10e\n", r, a, b, (a - b) / a / std::numeric_limits<float>::epsilon());
+		fprintf(fp, "%.10e %.10e %.10e %.10e\n", r, a, b, (a - b) / a / std::numeric_limits<double>::epsilon());
 	}
 	std::sort(errs.begin(), errs.end());
-	printf("%e %e\n", max_err / std::numeric_limits<float>::epsilon(), errs[99 * errs.size() / 100] / std::numeric_limits<float>::epsilon());
+	printf("%e %e\n", max_err / std::numeric_limits<double>::epsilon(), errs[99 * errs.size() / 100] / std::numeric_limits<double>::epsilon());
 	fclose(fp);
 //	return 0;
 	for (double x = 1.0; x < 2.0; x += 0.01) {
@@ -429,6 +459,8 @@ int main() {
 
 	TEST1(float, simd_f32, exp, expf, exp, -86.0, 86.0, true);
 	TEST1(float, simd_f32, exp2, exp2f, exp2, -125.0, 125.0, true);
+	TEST1(float, simd_f32, log, logf, log, exp(-1), exp(40), true);
+	TEST1(float, simd_f32, log2, log2f, log2, 0.00001, 100000, true);
 	TEST1(float, simd_f32, erf, erff, erf, -7, 7, true);
 	TEST1(float, simd_f32, erfc, erfcf, erfc, -8.9, 8.9, true);
 
@@ -452,7 +484,6 @@ int main() {
 	 TEST1(float, simd_f32, cbrt, cbrtf, cbrt, 1.0 / 4000, 4000, true);
 	 TEST1(float, simd_f32, tgamma, tgammaf, tgamma, -.99, -0.01, true);
 	 TEST2(float, simd_f32, pow, powf, pow, 1e-3, 1e3, .01, 10, true);
-	 TEST1(float, simd_f32, log, logf, log, exp(-1), exp(40), true);
 	 TEST1(float, simd_f32, sqrt, sqrtf, sqrt, 0, std::numeric_limits<int>::max(), true);
 	 TEST1(float, simd_f32, cvt, cvt32_ref, cvt32_test, 1, +10000000, true);*/
 
@@ -461,6 +492,8 @@ int main() {
 
 	TEST1(double, simd_f64, exp, exp, exp, -600.0, 600.0, true);
 	TEST1(double, simd_f64, exp2, exp2, exp2, -1000.0, 1000.0, true);
+	TEST1(double, simd_f64, log, log, log, exp(-1), exp(40), true);
+	TEST1(double, simd_f64, log2, log2, log2, .0001, 100000, true);
 	TEST1(double, simd_f64, erf, erf, erf, -9, 9, true);
 	TEST1(double, simd_f64, erfc, erfc, erfc, -25.0, 25.0, true);
 
@@ -483,7 +516,6 @@ int main() {
 	 TEST1(double, simd_f64, sinh, sinh, sinh, 0.01, 10.0, true);
 	 TEST1(double, simd_f64, tanh, tanh, tanh, 0.01, 10.0, true);
 	 TEST2(double, simd_f64, pow, pow, pow, 1e-3, 1e3, .01, 10, true);
-	 TEST1(double, simd_f64, log, log, log, exp(-1), exp(40), true);
 	 TEST1(double, simd_f64, sqrt, sqrt, sqrt, 0, std::numeric_limits<long long>::max(), true);
 	 TEST1(double, simd_f64, cvt, cvt64_ref, cvt64_test, 1LL, +1000000000LL, true);*/
 

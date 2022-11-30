@@ -389,46 +389,48 @@ void float_funcs(FILE* fp) {
 	}
 	/* log2 */
 	{
-		std::function<hiprec_real(hiprec_real)> func = [](hiprec_real x) {
-			static const auto c0 = hiprec_real(3) / (hiprec_real(2) * sqrt(hiprec_real(2)));
-			static const auto c1 = hiprec_real(1) / (hiprec_real(2) * sqrt(hiprec_real(2)));
-			static const auto log2inv = hiprec_real(1) / log(hiprec_real(2));
-			return log(c0 + x * c1) * log2inv;
-		};
-		auto coeff = ChebyCoeffs(func, std::numeric_limits<float>::epsilon() * double(1 << 10));
+		constexpr int N = 4;
 		fprintf(fp, "\n");
 		fprintf(fp, "simd_f32 log2(simd_f32 x) {\n");
-		fprintf(fp, "\tsimd_f32 y, z;\n");
-		fprintf(fp, "\tsimd_i32 i;\n");
-		fprintf(fp, "\ti = ((simd_i32&) x & simd_i32(0x7F800000));\n");
-		fprintf(fp, "\ti >>= int(23);\n");
-		fprintf(fp, "\ti -= simd_i32(127);\n");
-		fprintf(fp, "\tz = simd_f32(i);\n");
+		fprintf(fp, "\tsimd_f32 y, y2, z, x0;\n");
+		fprintf(fp, "\tsimd_i32 i, j, k;\n");
+		fprintf(fp, "\tx0 = x * simd_f32(M_SQRT2);\n");
+		fprintf(fp, "\tj = ((simd_i32&) x0 & simd_i32(0x7F800000));\n");
+		fprintf(fp, "\tk = ((simd_i32&) x & simd_i32(0x7F800000));\n");
+		fprintf(fp, "\tj >>= simd_i32(23);\n");
+		fprintf(fp, "\tk >>= simd_i32(23);\n");
+		fprintf(fp, "\tj -= simd_i32(127);\n");
+		fprintf(fp, "\tk -= j;\n");
+		fprintf(fp, "\tk <<= simd_i32(23);\n");
 		fprintf(fp, "\ti = (simd_i32&) x;\n");
-		fprintf(fp, "\ti &= simd_i32(0x7FFFFF);\n");
-		fprintf(fp, "\ti |= simd_i32(0x%X);\n", 127 << 23);
+		fprintf(fp, "\ti = (i & simd_i32(0x007FFFFF)) | k;\n");
 		fprintf(fp, "\tx = (simd_f32&) i;\n");
-		fprintf(fp, "\tx *= simd_f32(2);\n");
-		fprintf(fp, "\tx -= simd_f32(3);\n");
-		int N = coeff.size() - 1;
-		fprintf(fp, "\ty = simd_f32(%.9e);\n", coeff[N]);
-		for (int n = N - 1; n >= 0; n--) {
-			fprintf(fp, "\ty = fma(y, x, simd_f32(%.9e));\n", coeff[n]);
+		fprintf(fp, "\ty = (x - simd_f32(1)) / (x + simd_f32(1));\n");
+		fprintf(fp, "\ty2 = y * y;\n");
+		fprintf(fp, "\tz = simd_f32(%.9e);\n", 2.0 / (2 * (N - 1) + 1) / log(2));
+		for (int n = N - 2; n >= 0; n--) {
+			fprintf(fp, "\tz = fma(z, y2, simd_f32(%.9e));\n", 2.0 / (2 * n + 1) / log(2));
 		}
-		fprintf(fp, "\ty += z;\n");
-		fprintf(fp, "\ty += simd_f32(0.5);\n");
-		fprintf(fp, "\treturn y;\n");
+		fprintf(fp, "\tz *= y;\n");
+		fprintf(fp, "\tz += simd_f32(j);\n");
+		fprintf(fp, "\treturn z;\n");
 		fprintf(fp, "}\n");
+	}
+	/* log */
+	{
 		fprintf(fp, "\n");
 		fprintf(fp, "simd_f32 log(simd_f32 x) {\n");
-		fprintf(fp, "\treturn log2(x) * simd_f32(%.9e);\n", (double) hiprec_real(1) / log2(exp(hiprec_real(1))));
+		fprintf(fp, "\treturn log2(x) * simd_f32(%.9e);\n", 1.0 / log2(exp(1)));
 		fprintf(fp, "}\n");
+	}
+	/* log10 */
+	{
 		fprintf(fp, "\n");
 		fprintf(fp, "simd_f32 log10(simd_f32 x) {\n");
-		fprintf(fp, "\treturn log2(x) * simd_f32(%.9e);\n", (double) hiprec_real(1) / log2(hiprec_real(10)));
+		fprintf(fp, "\treturn log2(x) * simd_f32(%.9e);\n", 1.0 / log2(10.0));
 		fprintf(fp, "}\n");
-
 	}
+
 	/* expm1 */
 	{
 		constexpr int N = 9;
@@ -497,7 +499,7 @@ void float_funcs(FILE* fp) {
 		}
 		double log2 = log(2);
 		double factor = 1.0;
-		for( int n = 0; n < N; n++) {
+		for (int n = 0; n < N; n++) {
 			c0[n] *= factor;
 			factor *= log2;
 		}
@@ -886,45 +888,47 @@ void double_funcs(FILE* fp) {
 		fprintf(fp, "\treturn y;\n");
 		fprintf(fp, "}\n");
 	}
-	/* log */
+	/*log*/
 	{
-		std::function<hiprec_real(hiprec_real)> func = [](hiprec_real x) {
-			static const auto c0 = hiprec_real(3) / (hiprec_real(2) * sqrt(hiprec_real(2)));
-			static const auto c1 = hiprec_real(1) / (hiprec_real(2) * sqrt(hiprec_real(2)));
-			static const auto log2inv = hiprec_real(1) / log(hiprec_real(2));
-			return log(c0 + x * c1) * log2inv;
-		};
-		auto coeff = ChebyCoeffs(func, std::numeric_limits<double>::epsilon() * double(1 << 21));
+		constexpr int N = 10;
 		fprintf(fp, "\n");
 		fprintf(fp, "simd_f64 log2(simd_f64 x) {\n");
-		fprintf(fp, "\tsimd_f64 y, z;\n");
-		fprintf(fp, "\tsimd_i64 i;\n");
-		fprintf(fp, "\ti = ((simd_i64&) x & simd_i64(0x7FF0000000000000LL));\n");
-		fprintf(fp, "\ti >>= (long long)(52);\n");
-		fprintf(fp, "\ti -= simd_i64(1023LL);\n");
-		fprintf(fp, "\tz = simd_f64(i);\n");
+		fprintf(fp, "\tsimd_f64 y, y2, z, x0;\n");
+		fprintf(fp, "\tsimd_i64 i, j, k;\n");
+		fprintf(fp, "\tx0 = x * simd_f64(M_SQRT2);\n");
+		fprintf(fp, "\tj = ((simd_i64&) x0 & simd_i64(0x7FF0000000000000ULL));\n");
+		fprintf(fp, "\tk = ((simd_i64&) x & simd_i64(0x7FF0000000000000ULL));\n");
+		fprintf(fp, "\tj >>= simd_i64(52);\n");
+		fprintf(fp, "\tk >>= simd_i64(52);\n");
+		fprintf(fp, "\tj -= simd_i64(1023);\n");
+		fprintf(fp, "\tk -= j;\n");
+		fprintf(fp, "\tk <<= simd_i64(52);\n");
 		fprintf(fp, "\ti = (simd_i64&) x;\n");
-		fprintf(fp, "\ti &= simd_i64(0xFFFFFFFFFFFFFLL);\n");
-		fprintf(fp, "\ti |= simd_i64(0x%llXLL);\n", (long long) 1023 << (long long) 52);
+		fprintf(fp, "\ti = (i & simd_i64(0xFFFFFFFFFFFFFULL)) | k;\n");
 		fprintf(fp, "\tx = (simd_f64&) i;\n");
-		fprintf(fp, "\tx *= simd_f64(2);\n");
-		fprintf(fp, "\tx -= simd_f64(3);\n");
-		int N = coeff.size() - 1;
-		fprintf(fp, "\ty = simd_f64(%.17e);\n", coeff[N]);
-		for (int n = N - 1; n >= 0; n--) {
-			fprintf(fp, "\ty = fma(y, x, simd_f64(%.17e));\n", coeff[n]);
+		fprintf(fp, "\ty = (x - simd_f64(1)) / (x + simd_f64(1));\n");
+		fprintf(fp, "\ty2 = y * y;\n");
+		fprintf(fp, "\tz = simd_f64(%.17e);\n", (double) (2.0L / (long double) (2 * (N - 1) + 1) / logl(2)));
+		for (int n = N - 2; n >= 0; n--) {
+			fprintf(fp, "\tz = fma(z, y2, simd_f64(%.17e));\n", (double) (2.0L / (long double) (2 * n + 1) / log(2)));
 		}
-		fprintf(fp, "\ty += z;\n");
-		fprintf(fp, "\ty += simd_f64(0.5);\n");
-		fprintf(fp, "\treturn y;\n");
+		fprintf(fp, "\tz *= y;\n");
+		fprintf(fp, "\tz += simd_f64(j);\n");
+		fprintf(fp, "\treturn z;\n");
 		fprintf(fp, "}\n");
+	}
+	/* log */
+	{
 		fprintf(fp, "\n");
 		fprintf(fp, "simd_f64 log(simd_f64 x) {\n");
-		fprintf(fp, "\treturn log2(x) * simd_f64(%.17e);\n", (double) hiprec_real(1) / log2(exp(hiprec_real(1))));
+		fprintf(fp, "\treturn log2(x) * simd_f64(%.17e);\n", double(1.0L / log2l(expl(1.0L))));
 		fprintf(fp, "}\n");
+	}
+	/* log10 */
+	{
 		fprintf(fp, "\n");
 		fprintf(fp, "simd_f64 log10(simd_f64 x) {\n");
-		fprintf(fp, "\treturn log2(x) * simd_f64(%.17e);\n", (double) hiprec_real(1) / log2(hiprec_real(10)));
+		fprintf(fp, "\treturn log2(x) * simd_f64(%.17e);\n", double(1.0L / log2l(10.0L)));
 		fprintf(fp, "}\n");
 	}
 	/* cos */
