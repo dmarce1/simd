@@ -6,6 +6,7 @@
 #include <functional>
 #include <cmath>
 #include <thread>
+#include <fenv.h>
 #include "hiprec.hpp"
 #include <future>
 #include <vector>
@@ -70,7 +71,7 @@ test_result_t test_function(const F1& ref, const F2& test, T a, T b, bool relerr
 	for (int i = 0; i < size * N; i++) {
 		do {
 			xref[i] = rand1() * ((double) b - (double) a) + (double) a;
-		} while (xref[i] == 0.0 || std::abs(cosf(xref[i])) == 0.0);
+		} while (xref[i] == 0.0);
 	}
 	for (int i = 0; i < size * N; i += size) {
 		for (int j = 0; j < size; j++) {
@@ -116,7 +117,7 @@ test_result_t test_function(const F1& ref, const F2& test, T a, T b, bool relerr
 			T b = ytest[i / size][j];
 			double this_err = fabs((double) a - (double) b);
 			if (relerr) {
-				this_err /= fabs((double) a);
+				this_err /= fabs((double) a + 1e-300);
 			}
 			err += this_err;
 			//printf( "%e %e %e\n", xref[i + j], a, b);
@@ -375,14 +376,17 @@ float acos_test(float x) {
 
 int main() {
 	double s, c;
+	//feenableexcept(FE_DIVBYZERO);
+//	feenableexcept(FE_OVERFLOW);
+//	feenableexcept(FE_INVALID);
 	using namespace simd;
 	FILE* fp = fopen("test.txt", "wt");
 	double max_err = 0.0;
 	std::vector<double> errs;
 
-	for (double r = -1.0; r < 1.0; r += rand1() * 1e-3) {
-		double a = acos(simd_f64(r))[0];
-		double b = acos(r);
+	for (double r = -10.0; r < 10.0; r += rand1() * 1e-3) {
+		double a = atan(simd_f64(r))[0];
+		double b = atan(r);
 		max_err = std::max(max_err, fabs((a - b) / a));
 		errs.push_back(fabs((a - b) / a));
 		fprintf(fp, "%.10e %.10e %.10e %.10e\n", r, a, b, (a - b) / a / std::numeric_limits<double>::epsilon());

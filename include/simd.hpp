@@ -462,14 +462,19 @@ simd_f32 erfc(simd_f32);
 simd_f32 erf(simd_f32);
 simd_f32 cbrt(simd_f32);
 simd_f32 pow(simd_f32 y, simd_f32 x);
+simd_f32 atan(simd_f32);
 simd_f32 asin(simd_f32);
 simd_f32 acos(simd_f32 x);
 
-inline simd_f32 atan(simd_f32 x) {
-	simd_f32 z;
-	z = sqrt(simd_f32(1.f) + x * x);
-	return asin(x / z);
+inline simd_f32 fabs(simd_f32 x) {
+	simd_i32 i = (((simd_i32&) x) & simd_i32(0x7FFFFFFF));
+	return (simd_f32&) i;
 }
+
+inline simd_f32 abs(simd_f32 x) {
+	return fabs(x);
+}
+
 
 inline simd_f32 blend(simd_f32 a, simd_f32 b, simd_i32 mask) {
 	mask = -mask;
@@ -502,16 +507,9 @@ inline simd_f32 asinh(simd_f32 x) {
 inline simd_f32 acosh(simd_f32 x) {
 	const auto z = x - simd_f32(1);
 	return log(x + sqrt(z * (z + simd_f32(2))));
+
 }
 
-inline simd_f32 atanh(simd_f32 x) {
-	const auto y = simd_f32(0.5) * log((simd_f32(1) + x) / (simd_f32(1) - x));
-	const auto expm1p = expm1(y);
-	const auto expm1m = expm1(-y);
-	const auto sinhy = (expm1p - expm1m) * simd_f32(0.5);
-	const auto coshy = (simd_f32(2) + expm1p + expm1m) * simd_f32(0.5);
-	return y + (x - sinhy / coshy) / (coshy * coshy);
-}
 
 inline simd_f32 pow(simd_f32 y, simd_f32 x) {
 	return exp(x * log(y));
@@ -526,6 +524,16 @@ inline simd_f32 min(simd_f32 a, simd_f32 b) {
 	a.v = _mm256_min_ps(a.v, b.v);
 	return a;
 }
+
+inline simd_f32 atanh(simd_f32 x) {
+	const auto y = simd_f32(0.5) * log((simd_f32(1) + x) / (simd_f32(1) - x));
+	const auto expm1p = expm1(y);
+	const auto expm1m = expm1(-y);
+	const auto sinhy = (expm1p - expm1m) * simd_f32(0.5);
+	const auto coshy = (simd_f32(2) + expm1p + expm1m) * simd_f32(0.5);
+	return y + (x - sinhy / coshy) / (coshy * coshy);
+}
+
 
 inline simd_f32 round(simd_f32 x) {
 	simd_f32 result;
@@ -572,21 +580,13 @@ inline simd_f32 rsqrt(simd_f32 x) {
 	return x;
 }
 
-inline simd_f32 fabs(simd_f32 x) {
-	simd_i32 i = (((simd_i32&) x) & simd_i32(0x7FFFFFFF));
-	return (simd_f32&) i;
-}
-
-inline simd_f32 abs(simd_f32 x) {
-	return fabs(x);
-}
-
 inline simd_f32 copysign(simd_f32 x, simd_f32 y) {
 	simd_f32 result = fabs(x);
 	simd_i32 i = ((simd_i32&) result) | (simd_i32(0x80000000) & (simd_i32&) (y));
 	result = (simd_f32&) i;
 	return result;
 }
+
 
 inline simd_f32 atan2(simd_f32 y, simd_f32 x) {
 	return atan(y / x) + copysign(copysign(M_PI_2, x) - simd_f32(M_PI_2), y);
@@ -626,7 +626,6 @@ inline simd_f32 modf(simd_f32 x, simd_f32* i) {
 inline simd_f32 tan(simd_f32 x) {
 	return sin(x) / cos(x);
 }
-
 
 class simd_i64;
 class simd_f64;
@@ -1065,11 +1064,7 @@ inline simd_f64 pow(simd_f64 y, simd_f64 x) {
 
 simd_f64 acos(simd_f64 x);
 
-inline simd_f64 atan(simd_f64 x) {
-	simd_f64 z;
-	z = sqrt(simd_f64(1.0) + x * x);
-	return asin(x / z);
-}
+simd_f64 atan(simd_f64 x);
 
 inline simd_f64 blend(simd_f64 a, simd_f64 b, simd_i64 mask) {
 	mask = -mask;
@@ -1393,12 +1388,6 @@ public:
 	}
 
 };
-
-/*inline simd_f32 cos(simd_f32 x) {
-	auto X = simd_f32_2::two_sum(x, simd_f32(-M_PI / 2.0));
-	return -(sin(X.x) + sin(x) * X.y);
-
-}*/
 
 }
 
