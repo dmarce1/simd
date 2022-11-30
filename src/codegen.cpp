@@ -1000,7 +1000,7 @@ void double_funcs(FILE* fp) {
 	}
 	/* log1p */
 	{
-		constexpr int N = 8;
+		constexpr int N = 9;
 		fprintf(fp, "\n");
 		fprintf(fp, "simd_f64 log1p(simd_f64 x) {\n");
 		fprintf(fp, "\tsimd_f64 y, z, z2;\n");
@@ -1008,9 +1008,9 @@ void double_funcs(FILE* fp) {
 		fprintf(fp, "\tl = abs(x) < simd_f64(1.0/3.0);\n");
 		fprintf(fp, "\tz = x / (x + simd_f64(2));\n");
 		fprintf(fp, "\tz2 = z * z;\n");
-		fprintf(fp, "\ty = simd_f64(%.9e);\n", 2.0 / (2 * (N - 1) + 1));
+		fprintf(fp, "\ty = simd_f64(%.17e);\n", 2.0 / (2 * (N - 1) + 1));
 		for (int n = N - 2; n >= 0; n--) {
-			fprintf(fp, "\ty = fma(y, z2, simd_f64(%.9e));\n", 2.0 / (2 * n + 1));
+			fprintf(fp, "\ty = fma(y, z2, simd_f64(%.17e));\n", 2.0 / (2 * n + 1));
 		}
 		fprintf(fp, "\ty *= z;\n");
 		fprintf(fp, "\ty = blend(log(x + simd_f64(1)), y, l);");

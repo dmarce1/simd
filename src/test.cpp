@@ -454,7 +454,7 @@ int main() {
 	};
 
 	TEST1(float, simd_f32, log1p, log1pf, log1p, exp(-3), exp(3), true);
-	TEST1(float, simd_f64, log1p, log1p, log1p, exp(-3), exp(3), true);
+	TEST1(double, simd_f64, log1p, log1p, log1p, exp(-3), exp(3), true);
 
 	printf("Testing SIMD Functions\n");
 	printf("\nSingle Precision\n");
