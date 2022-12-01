@@ -422,12 +422,14 @@ float pow_test(float x, float y) {
 	int k = (i & 0x7FFFFF) | (127 << 23);
 	float a = (float&) j;
 	float b = (float&) k;
-	float z = (b - a) / (b + a);
+	float eps = (b - a) / a;
+	float z = -0.25f;
+	z = fmaf(z, eps, 0.5f);
+	z *= eps;
 	float z2 = z * z;
 	//= (4.121985831e-01);
-	//(5.770780164e-01);
-	float log1peps = (9.617966939e-01);
-	log1peps = fmaf(log1peps, z2, (2.885390082e+00));
+	float log1peps = 5.770780164e-01;
+	log1peps = fmaf(log1peps, z2, 2.885390082e+00);
 	log1peps *= z;
 
 	float loghi = log2hi[index];
@@ -436,9 +438,9 @@ float pow_test(float x, float y) {
 	float arg1 = y * loghi;
 	float arg1err = fmaf(y, loghi, -arg1);
 	float arg2 = y * loglo;
-	float arg2err = fmaf(y, loglo, -arg2);
 	float pwr = exp2f(y);
 	float theta = 1.f;
+	float err = 0.0;
 	for (int i = 0; i < 7; i++) {
 		if (xi & 1) {
 			theta *= pwr;
@@ -446,7 +448,8 @@ float pow_test(float x, float y) {
 		pwr *= pwr;
 		xi >>= 1;
 	}
-	z = exp2f(arg1) * theta * (1.0 + (arg2 + (arg1err + arg2err)));
+	//theta += err;
+	z = exp2f(arg1) * theta * (1.0 + (arg2 + arg1err));
 	return z;
 }
 
@@ -459,8 +462,8 @@ int main() {
 	FILE* fp = fopen("test.txt", "wt");
 	double max_err = 0.0;
 	std::vector<double> errs;
-	for (float x = 1.0; x < 16.0; x += 0.1) {
-		for (float y = 1.0; y <= 16.0; y += 0.1) {
+	for (float x = 1.0; x < 24.0; x += 0.1) {
+		for (float y = 1.0; y <= 24.0; y += 0.1) {
 			float b = pow_test(x, y);
 			float a = pow(x, y);
 			max_err = std::max(max_err, fabs((a - b) / a));
@@ -468,7 +471,7 @@ int main() {
 			fprintf(fp, "%.10e %.10e %.10e %.10e %.10e\n", x, y, a, b, (a - b) / a / std::numeric_limits<float>::epsilon());
 		}
 	}
-	printf("%e %e\n", max_err / std::numeric_limits<float>::epsilon(), errs[99 * errs.size() / 100] / std::numeric_limits<float>::epsilon());
+	printf("%e %e\n", max_err / std::numeric_limits<float>::epsilon(), errs[50 * errs.size() / 100] / std::numeric_limits<float>::epsilon());
 	fclose(fp);
 	return 0;
 	for (double r = 1e-30; r < 1e+30; r *= 1.5) {
