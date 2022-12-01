@@ -1283,6 +1283,94 @@ void double_funcs(FILE* fp) {
 		fprintf(fp, "}\n");
 
 	}
+
+	/* pow */
+	{
+		fprintf(fp, "\nsimd_f64 pow(simd_f64 x, simd_f64 y) {\n");
+		constexpr int Nlogbits = 12;
+		constexpr int Mparam = 5;
+		constexpr int Lparam = 2;
+		constexpr int Eparam = 8;
+		constexpr int Ntable = 1 << Nlogbits;
+		double log2hi[Ntable];
+		double log2lo[Ntable];
+		for (int n = 0; n < Ntable; n++) {
+			auto i = ((unsigned long long) n << (unsigned long long) (52 - Nlogbits)) | ((unsigned long long) 1023 << (unsigned long long) 52);
+			double a = (double&) i;
+			log2hi[n] = log2(hiprec_real(a));
+			log2lo[n] = log2(hiprec_real(a)) - hiprec_real(log2hi[n]);
+		}
+		fprintf(fp, "\tconstexpr double log2hi_table[] = {");
+		for (int n = 0; n < Ntable; n++) {
+			if (n % 16 == 0) {
+				fprintf(fp, "\n\t\t");
+			}
+			fprintf(fp, "%25.17e%s", log2hi[n], n == Ntable - 1 ? "" : ",");
+		}
+		fprintf(fp, "\t};\n");
+		fprintf(fp, "\tconstexpr double log2lo_table[] = {");
+		for (int n = 0; n < Ntable; n++) {
+			if (n % 16 == 0) {
+				fprintf(fp, "\n\t\t");
+			}
+			fprintf(fp, "%25.17e%s", log2lo[n], n == Ntable - 1 ? "" : ",");
+		}
+		fprintf(fp, "\t};\n");
+		fprintf(fp, "\tsimd_f64 z, p, q, z2, qlog, hilog, lolog, arghi, arglo;\n");
+		fprintf(fp, "\tsimd_i64 i, j, k, ilog, index;\n");
+		fprintf(fp, "\ti = (simd_i64&) x;\n");
+		fprintf(fp, "\tilog = (i >> simd_i64(52)) + simd_i64(-1023);\n");
+		fprintf(fp, "\tindex = (i & simd_i64(0xFFF0000000000ULL)) >> (unsigned long long) %i;\n", 52 - Nlogbits);
+		fprintf(fp, "\thilog.gather(log2hi_table, index);\n");
+		fprintf(fp, "\tlolog.gather(log2lo_table, index);\n");
+		fprintf(fp, "\tj = (i & simd_i64(0xFFF0000000000ULL)) | ((unsigned long long) 1023 << (unsigned long long) 52);\n");
+		fprintf(fp, "\tk = (i & simd_i64(0xFFFFFFFFFFFFFULL)) | ((unsigned long long) 1023 << (unsigned long long) 52);\n");
+		fprintf(fp, "\tp = (simd_f64&) j;\n");
+		fprintf(fp, "\tq = (simd_f64&) k;\n");
+		fprintf(fp, "\tq = (q - p) / p;\n");
+		static double paramco[Mparam];
+		paramco[0] = -1.0;
+		for (int n = 1; n < Mparam; n++) {
+			paramco[n] = paramco[n - 1] * -0.5;
+		}
+		paramco[0] = 0.0;
+		fprintf(fp, "\tz = simd_f64(%.17e);\n", paramco[Mparam - 1]);
+		for (int m = Mparam - 2; m >= 1; m--) {
+			fprintf(fp, "\tz = fma(z, q, simd_f64(%.17e));\n", paramco[m]);
+		}
+		fprintf(fp, "\tz *= q;\n");
+		fprintf(fp, "\tz2 = z * z;\n");
+		static double logco[Lparam];
+		for (int n = 0; n < Lparam; n++) {
+			logco[n] = hiprec_real(2) / hiprec_real(2 * n + 1) / log(hiprec_real(2));
+		}
+		fprintf(fp, "\tqlog = simd_f64(%.17e);\n", logco[Lparam - 1]);
+		for (int m = Lparam - 2; m >= 0; m--) {
+			fprintf(fp, "\tqlog = fma(qlog, z2, simd_f64(%.17e));\n", logco[m]);
+		}
+		fprintf(fp, "\tqlog *= z;\n");
+		fprintf(fp, "\tz = exp2(y);\n");
+		fprintf(fp, "\tp = simd_f64(1);\n");
+		for (int i = 0; i < 10; i++) {
+			fprintf(fp, "\tp *= blend(simd_f64(1), z, ilog & simd_i64(1));\n");
+			if( i != 9 ) {
+				fprintf(fp, "\tilog >>= 1;\n");
+				fprintf(fp, "\tz *= z;\n");
+			}
+		}
+
+		fprintf(fp, "\targhi = y * hilog;\n");
+		fprintf(fp, "\targlo = fma(y, hilog, -arghi);\n");
+		fprintf(fp, "\targlo += y * (lolog + qlog);\n");
+		fprintf(fp, "\tx = simd_f64(M_LN2) * arglo;\n");
+		fprintf(fp, "\tq = simd_f64(%.17e);\n", (double) (hiprec_real(1) / factorial(Eparam - 1)));
+		for (int m = Eparam - 2; m >= 0; m--) {
+			fprintf(fp, "\tq = fma(q, x, simd_f64(%.17e));\n", (double) (hiprec_real(1) / factorial(m)));
+		}
+		fprintf(fp, "\tz = exp2(arghi) * p * q;\n");
+		fprintf(fp, "\treturn z;\n");
+		fprintf(fp, "}\n");
+	}
 }
 
 /*void two_sum(simd_f64* xptr, simd_f64* yptr, simd_f64 a, simd_f64 b) {

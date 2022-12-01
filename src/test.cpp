@@ -428,10 +428,8 @@ float pow_test(float x, float y) {
 	z *= eps;
 	float z2 = z * z;
 	//= (4.121985831e-01);
-	float log1peps = 5.770780164e-01;
-	log1peps = fmaf(log1peps, z2, 2.885390082e+00);
+	float log1peps = 2.885390082e+00;
 	log1peps *= z;
-
 	float loghi = log2hi[index];
 	float loglo = log2lo[index];
 	//loghi += log1peps;
@@ -451,11 +449,75 @@ float pow_test(float x, float y) {
 //	printf( "%e %e %e \n", log2hi[index],log2lo[index], log1peps);
 	//theta += err;
 	x = logf(2) * (y * log1peps + (arg2 + arg1err));
-	double p = 1.0f / 3.0f;
+	double p = 1.0f / 6.0f;
 	p = fmaf(p, x, 0.5f);
 	p = fmaf(p, x, 1.0f);
 	p = fmaf(p, x, 1.0f);
 	z = exp2f(arg1) * theta * p;
+	return z;
+}
+
+double pow_test2(double x, double y) {
+	constexpr int Nlogbits = 12;
+	constexpr int Ntable = 1 << Nlogbits;
+	static double log2hi[Ntable];
+	static double log2lo[Ntable];
+	static bool init = false;
+	if (!init) {
+		for (int n = 0; n < Ntable; n++) {
+			auto i = ((unsigned long long) n << (unsigned long long) (52 - Nlogbits)) | ((unsigned long long) 1023 << (unsigned long long) 52);
+			double a = (double&) i;
+			log2hi[n] = log2(hiprec_real(a));
+			log2lo[n] = log2(hiprec_real(a)) - hiprec_real(log2hi[n]);
+		}
+		init = true;
+	}
+	unsigned long long i = (unsigned long long&) x;
+	unsigned long long xi = (i >> 52) - 1023;
+	int index = (i & 0x000FFF0000000000ULL) >> (unsigned long long) (52 - Nlogbits);
+	//printf("%i\n", index);
+	unsigned long long j = (i & 0x000FFF0000000000ULL) | ((unsigned long long) 1023 << (unsigned long long) 52);
+	unsigned long long k = (i & 0x000FFFFFFFFFFFFFULL) | ((unsigned long long) 1023 << (unsigned long long) 52);
+	double a = (double&) j;
+	double b = (double&) k;
+	double eps = (b - a) / a;
+	double z = -1.0 / 16.0;
+	z = fma(z, eps, 0.125);
+	z = fma(z, eps, -0.25);
+	z = fma(z, eps, 0.5);
+	z *= eps;
+	double z2 = z * z;
+	//double log1peps = 5.77078016355585421e-01;
+//	log1peps = fma(log1peps, z2, 9.61796693925975665e-01);
+	double log1peps = 9.61796693925975665e-01;
+	log1peps = fma(log1peps, z2, (2.88539008177792677e+00));
+	log1peps *= z;
+	double loghi = log2hi[index];
+	double loglo = log2lo[index];
+	double arg1 = y * loghi;
+	double arg1err = fma(y, loghi, -arg1);
+	double arg2 = y * loglo;
+	double pwr = exp2(y);
+	double theta = 1.0;
+	for (int i = 0; i < 10; i++) {
+		if (xi & 1) {
+			theta *= pwr;
+		}
+		pwr *= pwr;
+		xi >>= 1;
+	}
+//	printf( "%e %e %e \n", log2hi[index],log2lo[index], log1peps);
+	//theta += err;
+	x = log(2) * (y * log1peps + (arg2 + arg1err));
+	double p = 1.0 / 5040.0;
+	p = fma(p, x, 1.0 / 720.0);
+	p = fma(p, x, 1.0 / 120.0);
+	p = fma(p, x, 1.0 / 24.0);
+	p = fma(p, x, 1.0 / 6.0);
+	p = fma(p, x, 0.5);
+	p = fma(p, x, 1.0);
+	p = fma(p, x, 1.0);
+	z = exp2(arg1) * theta * p;
 	return z;
 }
 
@@ -468,16 +530,16 @@ int main() {
 	FILE* fp = fopen("test.txt", "wt");
 	double max_err = 0.0;
 	std::vector<double> errs;
-	for (float x = 1.0; x < 24.0; x += 0.1) {
-		for (float y = 1.0; y <= 24.0; y += 0.1) {
-			float b = pow_test(x, y);
-			float a = pow(x, y);
+	for (double x = 1.0; x < 140.0; x += .87254) {
+		for (double y = 1.0; y <= 140.0; y += .98526) {
+			double b = pow(simd_f64(x), simd_f64(y))[0];
+			double a = pow(x, y);
 			max_err = std::max(max_err, fabs((a - b) / a));
 			errs.push_back(fabs((a - b) / a));
-			fprintf(fp, "%.10e %.10e %.10e %.10e %.10e\n", x, y, a, b, (a - b) / a / std::numeric_limits<float>::epsilon());
+			fprintf(fp, "%.10e %.10e %.10e %.10e %.10e\n", x, y, a, b, (a - b) / a / std::numeric_limits<double>::epsilon());
 		}
 	}
-	printf("%e %e\n", max_err / std::numeric_limits<float>::epsilon(), errs[50 * errs.size() / 100] / std::numeric_limits<float>::epsilon());
+	printf("%e %e\n", max_err / std::numeric_limits<double>::epsilon(), errs[50 * errs.size() / 100] / std::numeric_limits<double>::epsilon());
 	fclose(fp);
 	return 0;
 	for (double r = 1e-30; r < 1e+30; r *= 1.5) {

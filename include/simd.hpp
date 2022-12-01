@@ -512,10 +512,6 @@ inline simd_f32 acosh(simd_f32 x) {
 
 }
 
-inline simd_f32 pow(simd_f32 y, simd_f32 x) {
-	return exp2(x * log2(y));
-}
-
 inline simd_f32 max(simd_f32 a, simd_f32 b) {
 	a.v = _mm256_max_ps(a.v, b.v);
 	return a;
@@ -778,12 +774,12 @@ public:
 		v = _mm256_sllv_epi64(v, other.v);
 		return *this;
 	}
-	inline simd_i64& operator>>=(long long i) {
+	inline simd_i64& operator>>=(unsigned long long i) {
 		CHECK_ALIGNMENT(this, 32);
 		v = _mm256_srli_epi64(v, i);
 		return *this;
 	}
-	inline simd_i64& operator<<=(long long i) {
+	inline simd_i64& operator<<=(unsigned long long i) {
 		CHECK_ALIGNMENT(this, 32);
 		v = _mm256_slli_epi64(v, i);
 		return *this;
@@ -1396,18 +1392,6 @@ public:
 simd_f64_2 log2_ext(simd_f64 x);
 simd_f64_2 log1p_ext(simd_f64 x);
 
-inline simd_f64 pow(simd_f64 x, simd_f64 y) {
-	static const simd_f64 c0(1.0 / M_LN2);
-	static const double ln2pt1 = logl(2);
-	static const double ln2pt2 = logl(2) - (long double) (ln2pt1);
-	simd_f64_2 LN2;
-	LN2.x = ln2pt1;
-	LN2.y = ln2pt2;
-	simd_f64 logx = log2(x);
-	simd_f64 z = exp2(logx * y);
-	z = fma(simd_f64(ln2pt1) * z, fma(-y, logx, log2(z)), z);
-	return z;
-}
 
 }
 
