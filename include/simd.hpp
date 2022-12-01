@@ -477,7 +477,6 @@ inline simd_f32 abs(simd_f32 x) {
 	return fabs(x);
 }
 
-
 inline simd_f32 blend(simd_f32 a, simd_f32 b, simd_i32 mask) {
 	mask = -mask;
 	a.v = _mm256_blendv_ps(a.v, b.v, ((simd_f32&) mask).v);
@@ -513,7 +512,6 @@ inline simd_f32 acosh(simd_f32 x) {
 
 }
 
-
 inline simd_f32 pow(simd_f32 y, simd_f32 x) {
 	return exp2(x * log2(y));
 }
@@ -536,7 +534,6 @@ inline simd_f32 atanh(simd_f32 x) {
 	const auto coshy = (simd_f32(2) + expm1p + expm1m) * simd_f32(0.5);
 	return y + (x - sinhy / coshy) / (coshy * coshy);
 }
-
 
 inline simd_f32 round(simd_f32 x) {
 	simd_f32 result;
@@ -589,7 +586,6 @@ inline simd_f32 copysign(simd_f32 x, simd_f32 y) {
 	result = (simd_f32&) i;
 	return result;
 }
-
 
 inline simd_f32 atan2(simd_f32 y, simd_f32 x) {
 	return atan(y / x) + copysign(copysign(M_PI_2, x) - simd_f32(M_PI_2), y);
@@ -1062,11 +1058,13 @@ simd_f64 erf(simd_f64);
 simd_f64 cbrt(simd_f64);
 simd_f64 log1p(simd_f64);
 
-inline simd_f64 pow(simd_f64 y, simd_f64 x) {
-	auto log2y = log2(y);
-	auto xxx = x * log2y;
-	auto yyy = fma(x, log2y, -xxx);
-	return exp2(xxx)*exp2(yyy);
+inline simd_f64 fabs(simd_f64 x) {
+	simd_i64 i = (((simd_i64&) x) & simd_i64(0x7FFFFFFFFFFFFFFFLL));
+	return (simd_f64&) i;
+}
+
+inline simd_f64 abs(simd_f64 x) {
+	return fabs(x);
 }
 
 simd_f64 acos(simd_f64 x);
@@ -1104,15 +1102,6 @@ inline simd_f64 atanh(simd_f64 x) {
 }
 
 simd_f64 exp2(simd_f64 x);
-
-inline simd_f64 fabs(simd_f64 x) {
-	simd_i64 i = (((simd_i64&) x) & simd_i64(0x7FFFFFFFFFFFFFFFLL));
-	return (simd_f64&) i;
-}
-
-inline simd_f64 abs(simd_f64 x) {
-	return fabs(x);
-}
 
 inline simd_f64 copysign(simd_f64 x, simd_f64 y) {
 	simd_f64 result = fabs(x);
@@ -1304,6 +1293,14 @@ public:
 		r.y = -y;
 		return r;
 	}
+	inline simd_f64_2 operator/(const simd_f64_2 A) const {
+		simd_f64_2 result;
+		simd_f64 xn = simd_f64(1) / A.x;
+		simd_f64 yn = x * xn;
+		simd_f64_2 diff = (*this - A * simd_f64_2(yn));
+		simd_f64_2 prod = two_product(xn, diff);
+		return simd_f64_2(yn) + prod;
+	}
 	inline simd_f64_2 operator-(simd_f64_2 other) const {
 		return *this + -other;
 	}
@@ -1395,6 +1392,22 @@ public:
 	}
 
 };
+
+simd_f64_2 log2_ext(simd_f64 x);
+simd_f64_2 log1p_ext(simd_f64 x);
+
+inline simd_f64 pow(simd_f64 x, simd_f64 y) {
+	static const simd_f64 c0(1.0 / M_LN2);
+	static const double ln2pt1 = logl(2);
+	static const double ln2pt2 = logl(2) - (long double) (ln2pt1);
+	simd_f64_2 LN2;
+	LN2.x = ln2pt1;
+	LN2.y = ln2pt2;
+	simd_f64 logx = log2(x);
+	simd_f64 z = exp2(logx * y);
+	z = fma(simd_f64(ln2pt1) * z, fma(-y, logx, log2(z)), z);
+	return z;
+}
 
 }
 

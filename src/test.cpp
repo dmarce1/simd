@@ -389,19 +389,65 @@ float log2_test(float x) {
 	return z + i;
 }
 
-double log2_test(double x) {
-	constexpr int N = 10;
-	int i = std::ilogbf(x * sqrtf(2));
-	x = ldexp(x, -i);
-	printf("%e\n", x - 1.0);
-	double y = (x - 1.0) / (x + 1.0);
-	double y2 = y * y;
-	double z = 2.0 / (2 * (N - 1) + 1);
-	for (int n = N - 2; n >= 0; n--) {
-		z = fma(z, y2, 2.0 / (2 * n + 1) / log(2));
+hiprec_real factorial(int n) {
+	if (n < 2) {
+		return hiprec_real(1);
+	} else {
+		return hiprec_real(n) * factorial(n - 1);
 	}
-	z *= y;
-	return z + i;
+}
+
+float pow_test(float x, float y) {
+	constexpr int Nlogbits = 11;
+	constexpr int Ntable = 1 << Nlogbits;
+	static float log2hi[Ntable];
+	static float log2lo[Ntable];
+	static bool init = false;
+	float lomax = 0.0;
+	if (!init) {
+		for (int n = 0; n < Ntable; n++) {
+			int i = (n << (23 - Nlogbits)) | (127 << 23);
+			float a = (float&) i;
+			log2hi[n] = log2(hiprec_real(a));
+			log2lo[n] = log2(hiprec_real(a)) - hiprec_real(log2hi[n]);
+			lomax = std::max(lomax, (float) fabs(log2lo[n]));
+		}
+		init = true;
+	}
+	int i = (int&) x;
+	int xi = (i >> 23) - 127;
+	int index = (i & 0x7FF000) >> (23 - Nlogbits);
+	//printf("%i\n", index);
+	int j = (i & 0x7FF000) | (127 << 23);
+	int k = (i & 0x7FFFFF) | (127 << 23);
+	float a = (float&) j;
+	float b = (float&) k;
+	float z = (b - a) / (b + a);
+	float z2 = z * z;
+	//= (4.121985831e-01);
+	//(5.770780164e-01);
+	float log1peps = (9.617966939e-01);
+	log1peps = fmaf(log1peps, z2, (2.885390082e+00));
+	log1peps *= z;
+
+	float loghi = log2hi[index];
+	float loglo = log2lo[index];
+	loghi += log1peps;
+	float arg1 = y * loghi;
+	float arg1err = fmaf(y, loghi, -arg1);
+	float arg2 = y * loglo;
+	float arg2err = fmaf(y, loglo, -arg2);
+	float pwr = exp2f(y);
+	float theta = 1.f;
+	for (int i = 0; i < 7; i++) {
+		if (xi & 1) {
+			theta *= pwr;
+		}
+		pwr *= pwr;
+		xi >>= 1;
+	}
+	z = exp2f(arg1) * theta * (1.0 + (arg2 + (arg1err + arg2err)));
+	return z;
 }
 
 int main() {
@@ -413,16 +459,32 @@ int main() {
 	FILE* fp = fopen("test.txt", "wt");
 	double max_err = 0.0;
 	std::vector<double> errs;
-
-	for (double r = -20.0; r < 20.0; r += 0.001) {
-		double a = tanh(simd_f64(r))[0];
-		double b = tanh(r);
+	for (float x = 1.0; x < 16.0; x += 0.1) {
+		for (float y = 1.0; y <= 16.0; y += 0.1) {
+			float b = pow_test(x, y);
+			float a = pow(x, y);
+			max_err = std::max(max_err, fabs((a - b) / a));
+			errs.push_back(fabs((a - b) / a));
+			fprintf(fp, "%.10e %.10e %.10e %.10e %.10e\n", x, y, a, b, (a - b) / a / std::numeric_limits<float>::epsilon());
+		}
+	}
+	printf("%e %e\n", max_err / std::numeric_limits<float>::epsilon(), errs[99 * errs.size() / 100] / std::numeric_limits<float>::epsilon());
+	fclose(fp);
+	return 0;
+	for (double r = 1e-30; r < 1e+30; r *= 1.5) {
+		auto A = log2_ext(simd_f64(r));
+		hiprec_real a = A.x[0];
+		a += A.y[0];
+		hiprec_real b = log2(hiprec_real(r));
 		max_err = std::max(max_err, fabs((a - b) / a));
-		errs.push_back(fabs((a - b) / a));
-		fprintf(fp, "%.10e %.10e %.10e %.10e\n", r, a, b, (a - b) / a / std::numeric_limits<double>::epsilon());
+		errs.push_back(abs((a - b) / a));
+
+		fprintf(fp, "%.10e %.10e %.10e %.10e\n", (double) r, (double) a, (double) b,
+				(double) ((a - b) / a / hiprec_real(std::numeric_limits<long double>::epsilon())));
 	}
 	std::sort(errs.begin(), errs.end());
-	printf("%e %e\n", max_err / std::numeric_limits<double>::epsilon(), errs[99 * errs.size() / 100] / std::numeric_limits<double>::epsilon());
+	printf("%e %e\n", (double) (max_err / std::numeric_limits<long double>::epsilon()),
+			(double) (errs[50 * errs.size() / 100] / std::numeric_limits<long double>::epsilon()));
 	fclose(fp);
 //	return 0;
 	for (double x = 1.0; x < 2.0; x += 0.01) {
@@ -452,42 +514,42 @@ int main() {
 		int i = (long long)(x);
 		return double(i);
 	};
+//	TEST2(float, simd_f32, pow, powf, pow, 1e-3, 1e3, .01, 10, true);
+	TEST2(double, simd_f64, pow, pow, pow, 1e-3, 1e3, .01, 10, true);
+	/*	TEST1(double, simd_f64, exp, exp, exp, -600.0, 600.0, true);
+	 TEST1(float, simd_f32, tgamma, tgammaf, tgamma, 0.5, 5.0, true);
+	 TEST1(double, simd_f64, tgamma, tgamma, tgamma, 0.5, 10.0, true);
 
-	TEST1(float, simd_f32, log1p, log1pf, log1p, exp(-3), exp(3), true);
-	TEST1(double, simd_f64, log1p, log1p, log1p, exp(-3), exp(3), true);
+	 printf("Testing SIMD Functions\n");
+	 printf("\nSingle Precision\n");
+	 printf("name   speed        avg err      max err\n");
 
-	printf("Testing SIMD Functions\n");
-	printf("\nSingle Precision\n");
-	printf("name   speed        avg err      max err\n");
+	 TEST1(float, simd_f32, cosh, coshf, cosh, -10.0, 10.0, true);
+	 TEST1(float, simd_f32, sinh, sinhf, sinh, -10.0, 10.0, true);
+	 TEST1(float, simd_f32, tanh, tanhf, tanh, -10.0, 10.0, true);
+	 TEST1(float, simd_f32, exp, expf, exp, -86.0, 86.0, true);
+	 TEST1(float, simd_f32, exp2, exp2f, exp2, -125.0, 125.0, true);
+	 TEST1(float, simd_f32, expm1, expm1f, expm1, -2.0, 2.0, true);
+	 TEST1(float, simd_f32, log, logf, log, exp(-1), exp(40), true);
+	 TEST1(float, simd_f32, log2, log2f, log2, 0.00001, 100000, true);
+	 TEST1(float, simd_f32, log1p, log1pf, log1p, exp(-3), exp(3), true);
+	 TEST1(float, simd_f32, erf, erff, erf, -7, 7, true);
+	 TEST1(float, simd_f32, erfc, erfcf, erfc, -8.9, 8.9, true);
 
-	TEST1(float, simd_f32, cosh, coshf, cosh, -10.0, 10.0, true);
-	TEST1(float, simd_f32, sinh, sinhf, sinh, -10.0, 10.0, true);
-	TEST1(float, simd_f32, tanh, tanhf, tanh, -10.0, 10.0, true);
-	TEST1(float, simd_f32, exp, expf, exp, -86.0, 86.0, true);
-	TEST1(float, simd_f32, exp2, exp2f, exp2, -125.0, 125.0, true);
-	TEST1(float, simd_f32, expm1, expm1f, expm1, -2.0, 2.0, true);
-	TEST1(float, simd_f32, log, logf, log, exp(-1), exp(40), true);
-	TEST1(float, simd_f32, log2, log2f, log2, 0.00001, 100000, true);
-	TEST1(float, simd_f32, erf, erff, erf, -7, 7, true);
-	TEST1(float, simd_f32, erfc, erfcf, erfc, -8.9, 8.9, true);
+	 TEST1(float, simd_f32, sin, sinf, sin, -2 * M_PI, 2 * M_PI, true);
+	 TEST1(float, simd_f32, cos, cosf, cos, -2 * M_PI, 2 * M_PI, true);
+	 TEST1(float, simd_f32, tan, tanf, tan, -2 * M_PI, 2 * M_PI, true);
 
-	TEST1(float, simd_f32, sin, sinf, sin, -2 * M_PI, 2 * M_PI, true);
-	TEST1(float, simd_f32, cos, cosf, cos, -2 * M_PI, 2 * M_PI, true);
-	TEST1(float, simd_f32, tan, tanf, tan, -2 * M_PI, 2 * M_PI, true);
-
-	TEST1(float, simd_f32, asin, asinf, asin, -1, 1, true);
-	TEST1(float, simd_f32, acos, acosf, acos, -1, 1, true);
-	TEST1(float, simd_f32, atan, atanf, atan, -10.0, 10.0, true);
-
+	 TEST1(float, simd_f32, asin, asinf, asin, -1, 1, true);
+	 TEST1(float, simd_f32, acos, acosf, acos, -1, 1, true);
+	 TEST1(float, simd_f32, atan, atanf, atan, -10.0, 10.0, true);
+	 */
 	/*
 	 TEST1(float, simd_f32, acosh, acoshf, acosh, 1.001, 10.0, true);
 	 TEST1(float, simd_f32, asinh, asinhf, asinh, .001, 10, true);
 	 TEST1(float, simd_f32, atanh, atanhf, atanh, 0.001, 0.999, true);
-	 TEST2(float, simd_f32, pow, powf, pow, 1e-3, 1e3, .01, 10, true);
-	 TEST2(double, simd_f64, pow, pow, pow, 1e-3, 1e3, .01, 10, true);
 
 	 TEST1(float, simd_f32, cbrt, cbrtf, cbrt, 1.0 / 4000, 4000, true);
-	 TEST1(float, simd_f32, tgamma, tgammaf, tgamma, -.99, -0.01, true);
 	 TEST1(float, simd_f32, sqrt, sqrtf, sqrt, 0, std::numeric_limits<int>::max(), true);
 	 TEST1(float, simd_f32, cvt, cvt32_ref, cvt32_test, 1, +10000000, true);*/
 
@@ -502,6 +564,7 @@ int main() {
 	TEST1(double, simd_f64, expm1, expm1, expm1, -2.0, 2.0, true);
 	TEST1(double, simd_f64, log, log, log, exp(-1), exp(40), true);
 	TEST1(double, simd_f64, log2, log2, log2, .0001, 100000, true);
+	TEST1(double, simd_f64, log1p, log1p, log1p, exp(-3), exp(3), true);
 	TEST1(double, simd_f64, erf, erf, erf, -9, 9, true);
 	TEST1(double, simd_f64, erfc, erfc, erfc, -25.0, 25.0, true);
 
@@ -518,7 +581,6 @@ int main() {
 	 TEST1(double, simd_f64, asinh, asinh, asinh, .001, 10, true);
 	 TEST1(double, simd_f64, atanh, atanh, atanh, 0.001, 0.999, true);
 	 TEST1(double, simd_f64, cbrt, cbrt, cbrt, 1.0 / 4000, 4000, true);
-	 TEST1(double, simd_f64, tgamma, tgamma, tgamma, -.99, -0.01, true);
 	 TEST1(double, simd_f64, sqrt, sqrt, sqrt, 0, std::numeric_limits<long long>::max(), true);
 	 TEST1(double, simd_f64, cvt, cvt64_ref, cvt64_test, 1LL, +1000000000LL, true);*/
 
