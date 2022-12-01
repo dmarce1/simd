@@ -434,7 +434,7 @@ float pow_test(float x, float y) {
 
 	float loghi = log2hi[index];
 	float loglo = log2lo[index];
-	loghi += log1peps;
+	//loghi += log1peps;
 	float arg1 = y * loghi;
 	float arg1err = fmaf(y, loghi, -arg1);
 	float arg2 = y * loglo;
@@ -448,8 +448,14 @@ float pow_test(float x, float y) {
 		pwr *= pwr;
 		xi >>= 1;
 	}
+//	printf( "%e %e %e \n", log2hi[index],log2lo[index], log1peps);
 	//theta += err;
-	z = exp2f(arg1) * theta * (1.0 + (arg2 + arg1err));
+	x = logf(2) * (y * log1peps + (arg2 + arg1err));
+	double p = 1.0f / 3.0f;
+	p = fmaf(p, x, 0.5f);
+	p = fmaf(p, x, 1.0f);
+	p = fmaf(p, x, 1.0f);
+	z = exp2f(arg1) * theta * p;
 	return z;
 }
 
