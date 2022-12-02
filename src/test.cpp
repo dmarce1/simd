@@ -651,7 +651,7 @@ double_2 exact_exp(double x) {
 }
 
 double_2 exact_log(double x) {
-	constexpr int Nbits = 16;
+	constexpr int Nbits = 14;
 	constexpr int N = 1 << Nbits;
 	constexpr std::uint64_t logmask1 = (0xFFFFFFFFFFFFFFFFULL >> (52 - Nbits)) << (52 - Nbits);
 	constexpr std::uint64_t logmask2 = (0xFFFFFFFFFFFFFULL >> (52 - Nbits)) << (52 - Nbits);
@@ -685,71 +685,64 @@ double_2 exact_log(double x) {
 	n <<= 52 - Nbits;
 	double_2 X0, DX, Y, Y2, Z, DY;
 	X0.x = (double&) n;
-	X0.y = 0.0;
-	DX = (double_2(x) - X0) / X0;
-	//DX.y = DX.y + std::numeric_limits<double>::epsilon();
-//	DX = double_2(2) * DX / (double_2(2) + DX);
+	DX.x = (x - X0.x) / X0.x;
 	n = (n & 0xFFFFFFFFFFFFFULL) >> (52 - Nbits);
 	index = n;
-
-	constexpr int M = 2;
+	constexpr int M = 0;
 	Y = DX;
-	{
-		double yp1 = Y.x + Y.y + 1.0;
-		n = ((uint64_t&) yp1) & 0xFFFFFFFFFFFFFULL;
-		uint64_t m = 0xFFFFFFFFFFFFFULL;
-		m >>= 52 - Nbits;
-		m <<= 52 - Nbits;
-		n = n & ~m;
-		n >>= 52 - 2 * Nbits;
-		if (n >= (1 << Nbits)) {
-			n = (1 << Nbits) - 1;
-		}
-		if (n < 0) {
-			printf("n less zero\n");
-		} else if (n > N) {
-			printf("n 2hi\n");
-		}
-		double expm1p1 = expm1hitable[n];
-		double expm1p2 = expm1lotable[n];
-		n <<= 52 - 2 * Nbits;
-		n |= (uint64_t) 1023 << 52;
-		double y0 = (double&) n;
-		y0 -= 1.0;
-		DY = Y - double_2(y0);
-		double_2 E0 = double_2::quick_two_sum(expm1p1, expm1p2);
-		double_2 D = ((E0 + double_2(1)) * (double_2(1) + DY));
-		Y = Y + ((double_2(1) - D) + DX) / D;
+	volatile double s;
+	volatile double v;
+	volatile double e;
+	double yp1 = Y.x + Y.y + 1.0;
+	n = ((uint64_t&) yp1) & 0xFFFFFFFFFFFFFULL;
+	uint64_t m = 0xFFFFFFFFFFFFFULL;
+	m >>= 52 - Nbits;
+	m <<= 52 - Nbits;
+	n = n & ~m;
+	n >>= 52 - 2 * Nbits;
+	if (n >= (1 << Nbits)) {
+		n = (1 << Nbits) - 1;
 	}
-	{
-		double yp1 = Y.x + Y.y + 1.0;
-		n = ((uint64_t&) yp1) & 0xFFFFFFFFFFFFFULL;
-		uint64_t m = 0xFFFFFFFFFFFFFULL;
-		m >>= 52 - Nbits;
-		m <<= 52 - Nbits;
-		n = n & ~m;
-		n >>= 52 - 2 * Nbits;
-		if (n >= (1 << Nbits)) {
-			n = (1 << Nbits) - 1;
-		}
-		if (n < 0) {
-			printf("n less zero\n");
-		} else if (n > N) {
-			printf("n 2hi\n");
-		}
-		double expm1p1 = expm1hitable[n];
-		double expm1p2 = expm1lotable[n];
-		n <<= 52 - 2 * Nbits;
-		n |= (uint64_t) 1023 << 52;
-		double y0 = (double&) n;
-		y0 -= 1.0;
-		DY = Y - double_2(y0);
-		double_2 E0 = double_2::quick_two_sum(expm1p1, expm1p2);
-		double_2 D = ((E0 + double_2(1)) * (double_2(1) + DY + double_2(0.5) * DY * DY));
-		Y = Y + ((double_2(1) - D) + DX) / D;
-	}
-	Y = Y + double_2(loghitable[index]);
-	Y = Y + double_2(loglotable[index]);
+	double expm1p1 = expm1hitable[n];
+	double expm1p2 = expm1lotable[n];
+	n <<= 52 - 2 * Nbits;
+	n |= (uint64_t) 1023 << 52;
+	double y0 = (double&) n;
+	y0 -= 1.0;
+	e = -y0;
+	s = Y.x + e;
+	DY.x = s;
+	DY.y = 0.0;
+	double E0 = expm1p1;
+	double_2 E2, E1;
+	s = 1.0 + E0;
+	v = s - 1.0;
+	e = E0 - v;
+	E1.x = s;
+	E1.y = e;
+	double tmp = DY.x * fma(0.5, DY.x, 1.0);
+	s = 1.0 + tmp;
+	v = s - 1.0;
+	e = tmp - v;
+	E2.x = s;
+	E2.y = e;
+	double_2 D;
+	D.x = E1.x * E2.x;
+	D.y = fma(E1.x, E2.x, -D.x);
+	D.y = fma(E1.x, E2.y, D.y);
+	D.y = fma(E1.y, E2.x, D.y);
+	double OMD;
+	s = 1.0 - D.x;
+	OMD = s - D.y;
+	Y.x = Y.x + (OMD + DX.x) / D.x;
+	Y.y = 0.0;
+	Y2.x = loghitable[index];
+	Y2.y = loglotable[index];
+	s = Y2.x + Y.x;
+	v = s - Y2.x;
+	e = Y.x - v;
+	Y.x = s;
+	Y.y = e + Y2.y;
 	return Y;
 }
 
@@ -757,11 +750,10 @@ double pow_test(double x, double y) {
 	static double LN2hi = log(hiprec_real(2));
 	static double LN2lo = log(hiprec_real(2)) - hiprec_real(LN2hi);
 	double_2 ln2;
-	bool invx = x < 1.0;
+	double volatile s;
+	double volatile e;
+	double volatile v;
 	bool invy = y < 0.0;
-	if( invx ) {
-//		x = 1.0 / x;
-	}
 	y = abs(y);
 	ln2.x = LN2hi;
 	ln2.y = LN2lo;
@@ -769,34 +761,25 @@ double pow_test(double x, double y) {
 	x = frexp(x, &I);
 	x *= 2.0;
 	I--;
+	double_2 arg;
+	double_2 Z, Y, R;
 	auto logx = exact_log(x);
-	logx = logx + ln2 * double_2(I);
-	double_2 arg = double_2(y) * logx;
-	double_2 Y, X;
-	X.x = 0.0;
-	X.y = 0.0;
-	Y = double_2(expl(arg.x))*(double_2(1) + double_2(arg.y));
-	Y.y = 0.0;
-	y = frexp(Y.x, &I);
-	I--;
-	y *= 2.0;
-	auto logy = double_2(I) * ln2 + exact_log(y);
-	Y = Y + arg * Y - Y * logy;
-
-	Y.y = 0.0;
-	y = frexp(Y.x, &I);
-	I--;
-	y *= 2.0;
-	logy = double_2(I) * ln2 + exact_log(y);
-	Y = Y + arg * Y - Y * logy;
-
-	if( invx ) {
-	//	Y = double_2(1.0) / Y;
+	Z.x = ln2.x * I;
+	Z.y = fma(ln2.x, I, -Z.x);
+	Z.y += ln2.y * I;
+	s = Z.x + logx.x;
+	v = s - Z.x;
+	e = logx.x - v;
+	logx.x = s;
+	logx.y = e + Z.y + logx.y;
+	arg.x = y * logx.x;
+	arg.y = fma(y, logx.x, -arg.x);
+	arg.y += y * logx.y;
+	double res = (1.0 + arg.y) * exp(arg.x);
+	if (invy) {
+		res = 1.0 / res;
 	}
-	if( invy ) {
-		Y = double_2(1.0) / Y;
-	}
-	return Y;
+	return res;
 }
 
 int main() {
