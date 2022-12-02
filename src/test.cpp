@@ -650,17 +650,17 @@ double_2 exact_exp(double x) {
 	return Z;
 }
 
-double exact_log(double x) {
+double_2 exact_log(double x) {
 	constexpr int Nbits = 13;
 	constexpr int N = 1 << Nbits;
 	constexpr std::uint64_t logmask1 = (0xFFFFFFFFFFFFFFFFULL >> (52 - Nbits)) << (52 - Nbits);
 	constexpr std::uint64_t logmask2 = (0xFFFFFFFFFFFFFULL >> (52 - Nbits)) << (52 - Nbits);
 	constexpr std::uint64_t expmask1 = ~logmask1;
 	constexpr std::uint64_t expmask2 = (!logmask2 & ((0xFFFFFFFFFFFFFULL >> (52 - 2 * Nbits)) << (52 - 2 * Nbits)));
-	static double loghi[N];
-	static double loglo[N];
-	static double exphi[N];
-	static double explo[N];
+	static double loghitable[N];
+	static double loglotable[N];
+	static double expm1hitable[N];
+	static double expm1lotable[N];
 	static bool init = false;
 	if (!init) {
 		init = true;
@@ -671,45 +671,60 @@ double exact_log(double x) {
 			double y = (double&) ai;
 			y -= 1.0;
 			hiprec_real log_exact = log(hiprec_real(x));
-			hiprec_real exp_exact = exp(-hiprec_real(y));
-			loghi[n] = log_exact;
-			exphi[n] = exp_exact;
-			loglo[n] = log_exact - hiprec_real(loghi[n]);
-			explo[n] = exp_exact - hiprec_real(exphi[n]);
-	//		printf( "%e %e %e | %e %e %e\n", x, loghi[n], loglo[n], y, exphi[n], explo[n]);
+			hiprec_real exp_exact = exp(hiprec_real(y)) - hiprec_real(1);
+			loghitable[n] = log_exact;
+			expm1hitable[n] = exp_exact;
+			loglotable[n] = log_exact - hiprec_real(loghitable[n]);
+			expm1lotable[n] = exp_exact - hiprec_real(expm1hitable[n]);
+			//		printf( "%e %e %e | %e %e %e\n", x, loghi[n], loglo[n], y, exphi[n], explo[n]);
 		}
 	}
+	uint64_t index;
 	uint64_t n = ((uint64_t&) x);
 	n >>= 52 - Nbits;
 	n <<= 52 - Nbits;
-	double x0 = (double&) n;
-	double dx = (x - x0) / x0;
+	double_2 X0, DX, Y, Y2, Z, DY;
+	X0.x = (double&) n;
+	X0.y = 0.0;
+	DX = (double_2(x) - X0) / X0;
+	//DX.y = DX.y + std::numeric_limits<double>::epsilon();
+//	DX = double_2(2) * DX / (double_2(2) + DX);
 	n = (n & 0xFFFFFFFFFFFFFULL) >> (52 - Nbits);
-	double logxp1 = loghi[n];
-	double logxp2 = loglo[n];
-	double y = dx + 1.0;
-	n = ((uint64_t&) y) & 0xFFFFFFFFFFFFFULL;
-	uint64_t m = 0xFFFFFFFFFFFFFULL;
-	m >>= 52 - Nbits;
-	m <<= 52 - Nbits;
-	n = n & ~m;
-	n >>= 52 - 2 * Nbits;
-	if( n >= (1 << Nbits)) {
-		n = (1<<Nbits) - 1;
-	}
-	double expyp1 = exphi[n];
-	double expyp2 = explo[n];
-	n <<= 52 - 2 * Nbits;
-	n |= (uint64_t) 1023 << 52;
-	double y0 = (double&) n;
-	y0 -= 1.0;
-	logxp2 += dx;
-	double dy = dx - y0;
-//	printf( "%e %e\n", 1.0 - (expyp1 + expyp2), dx);
-	logxp2 += (1.0 + dx) * (expyp1 + expyp2) * (1.0 - dy) - 1.0;
-	return logxp1 + logxp2;
-}
+	index = n;
 
+	constexpr int M = 2;
+	Y = DX;
+	for (int iter = 0; iter < M; iter++) {
+		double yp1 = Y.x + Y.y + 1.0;
+		n = ((uint64_t&) yp1) & 0xFFFFFFFFFFFFFULL;
+		uint64_t m = 0xFFFFFFFFFFFFFULL;
+		m >>= 52 - Nbits;
+		m <<= 52 - Nbits;
+		n = n & ~m;
+		n >>= 52 - 2 * Nbits;
+		if (n >= (1 << Nbits)) {
+			n = (1 << Nbits) - 1;
+		}
+		if (n < 0) {
+			printf("n less zero\n");
+		} else if (n > N) {
+			printf("n 2hi\n");
+		}
+		double expm1p1 = expm1hitable[n];
+		double expm1p2 = expm1lotable[n];
+		n <<= 52 - 2 * Nbits;
+		n |= (uint64_t) 1023 << 52;
+		double y0 = (double&) n;
+		y0 -= 1.0;
+		DY = Y - double_2(y0);
+		double_2 E0 = double_2::quick_two_sum(expm1p1, expm1p2);
+		double_2 D = ((E0 + double_2(1)) * (double_2(1) + DY + double_2(0.5) * DY * DY));
+		Y = Y + ((double_2(1)  - D) + DX) / D;
+	}
+	Y = Y + double_2(loghitable[index]);
+	Y = Y + double_2(loglotable[index]);
+	return Y;
+}
 
 int main() {
 	double s, c;
@@ -724,38 +739,45 @@ int main() {
 	double b = pow_test(3.0, 42.0);
 	bool first = true;
 	/*	for (double x = .000001; x < 1.0e5; x *= 1.1254) {
-		for (double y = -50.0; y <= 50.0; y += 1.11) {
-			if (!first) {
-				tm1.start();
-			}
-			b = exact_exp(x);
-			if (!first) {
-				tm1.stop();
-			}
-			tm2.start();
-			double a = pow(x, y);
-			tm2.stop();
-			max_err = std::max(max_err, fabs((a - b) / a));
-			errs.push_back(fabs((a - b) / a));
-			fprintf(fp, "%.10e %.10e %.10e %.10e %.10e\n", x, y, a, b, (a - b) / a / std::numeric_limits<double>::epsilon());
-			first = false;
-		}
-	}
-	printf("%e\n", tm1.read() / tm2.read());
-	std::sort(errs.begin(), errs.end());
-	printf("%e %e\n", max_err / std::numeric_limits<double>::epsilon(), errs[50 * errs.size() / 100] / std::numeric_limits<double>::epsilon());
-	fclose(fp);
-	return 0;*/
-	for (double r = 1.0; r < 2.0; r += 0.001) {
+	 for (double y = -50.0; y <= 50.0; y += 1.11) {
+	 if (!first) {
+	 tm1.start();
+	 }
+	 b = exact_exp(x);
+	 if (!first) {
+	 tm1.stop();
+	 }
+	 tm2.start();
+	 double a = pow(x, y);
+	 tm2.stop();
+	 max_err = std::max(max_err, fabs((a - b) / a));
+	 errs.push_back(fabs((a - b) / a));
+	 fprintf(fp, "%.10e %.10e %.10e %.10e %.10e\n", x, y, a, b, (a - b) / a / std::numeric_limits<double>::epsilon());
+	 first = false;
+	 }
+	 }
+	 printf("%e\n", tm1.read() / tm2.read());
+	 std::sort(errs.begin(), errs.end());
+	 printf("%e %e\n", max_err / std::numeric_limits<double>::epsilon(), errs[50 * errs.size() / 100] / std::numeric_limits<double>::epsilon());
+	 fclose(fp);
+	 return 0;*/
+	exact_log(1.243);
+	for (double r = 1.0 + (0x1) * std::numeric_limits<double>::epsilon(); r < 2.0; r += 0.001) {
+		tm1.start();
 		auto xxx = exact_log(r);
-		hiprec_real a = hiprec_real(xxx);
-		hiprec_real b = log(hiprec_real(r));
+		tm1.stop();
+		hiprec_real a = hiprec_real(xxx.x) + hiprec_real(xxx.y);
+		tm2.start();
+		double cc = pow(r, 2.3);
+		tm2.stop();
+		hiprec_real b = cc;
 		max_err = std::max(max_err, fabs((a - b) / a));
 		errs.push_back(abs((a - b) / a));
 
-		fprintf(fp, "%.10e %.10e %.10e %.10e\n", (double) r, (double) a, (double) b,
+		fprintf(fp, "%.10e %.10e %.10e %.10e\n", (double) r, (double) a, (double) (a - b),
 				(double) ((a - b) / a / hiprec_real(std::numeric_limits<double>::epsilon())));
 	}
+	printf( "%e\n", tm1.read() /tm2.read());
 	std::sort(errs.begin(), errs.end());
 	printf("%e %e\n", (double) (max_err / std::numeric_limits<double>::epsilon()),
 			(double) (errs[50 * errs.size() / 100] / std::numeric_limits<double>::epsilon()));
