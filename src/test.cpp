@@ -650,180 +650,66 @@ double_2 exact_exp(double x) {
 	return Z;
 }
 
-double_2 exact_log(double x) {
-	constexpr int Nbitslog2 = 11;
-	constexpr int Nlog2 = 1 << Nbitslog2;
-	constexpr std::uint64_t log2mask1 = (0xFFFFFFFFFFFFFFFFULL >> (52 - Nbitslog2)) << (52 - Nbitslog2);
-	constexpr std::uint64_t log2mask2 = (0xFFFFFFFFFFFFFULL >> (52 - Nbitslog2)) << (52 - Nbitslog2);
-	static double_2 logtable[Nlog2];
+double exact_log(double x) {
+	constexpr int Nbits = 13;
+	constexpr int N = 1 << Nbits;
+	constexpr std::uint64_t logmask1 = (0xFFFFFFFFFFFFFFFFULL >> (52 - Nbits)) << (52 - Nbits);
+	constexpr std::uint64_t logmask2 = (0xFFFFFFFFFFFFFULL >> (52 - Nbits)) << (52 - Nbits);
+	constexpr std::uint64_t expmask1 = ~logmask1;
+	constexpr std::uint64_t expmask2 = (!logmask2 & ((0xFFFFFFFFFFFFFULL >> (52 - 2 * Nbits)) << (52 - 2 * Nbits)));
+	static double loghi[N];
+	static double loglo[N];
+	static double exphi[N];
+	static double explo[N];
 	static bool init = false;
 	if (!init) {
 		init = true;
-		for (int n = 0; n < Nlog2; n++) {
-			std::uint64_t ai = ((std::uint64_t) n << (52 - Nbitslog2)) | ((std::uint64_t)(1023) << 52);
-			double a = (double&) ai;
-			double_2& entry = logtable[n];
-			hiprec_real exact = log(hiprec_real(a));
-			entry = exact;
-			entry = entry + double_2(double(exact - hiprec_real(entry)));
+		for (int n = 0; n < N; n++) {
+			std::uint64_t ai = ((std::uint64_t) n << (52 - Nbits)) | ((std::uint64_t)(1023) << 52);
+			double x = (double&) ai;
+			ai = ((std::uint64_t) n << (52 - 2 * Nbits)) | ((std::uint64_t)(1023) << 52);
+			double y = (double&) ai;
+			y -= 1.0;
+			hiprec_real log_exact = log(hiprec_real(x));
+			hiprec_real exp_exact = exp(-hiprec_real(y));
+			loghi[n] = log_exact;
+			exphi[n] = exp_exact;
+			loglo[n] = log_exact - hiprec_real(loghi[n]);
+			explo[n] = exp_exact - hiprec_real(exphi[n]);
+	//		printf( "%e %e %e | %e %e %e\n", x, loghi[n], loglo[n], y, exphi[n], explo[n]);
 		}
 	}
-
-	volatile double s;
-	volatile double v;
-	volatile double w;
-	volatile double z;
-	volatile double s2;
-	double t;
-	double e;
-	double a;
-	double b;
-	double x2;
-	double x0;
-	double_2 Z, X, p, q;
-	std::uint64_t i;
-	i = (std::uint64_t&) x;
-	i &= log2mask1;
-	x0 = ((double &) i);
-	x -= x0;
-	i &= log2mask2;
-	i >>= 52 - Nbitslog2;
-	x0 *= 2;
-	s = x0 + x;
-	v = s - x0;
-	e = x - v;
-	q.x = s;
-	q.y = e;
-	a = 1.0 / q.x;
-	b = x * a;
-	p.x = q.x * b;
-	p.y = fma(q.x, b, -p.x);
-	p.y = fma(b, q.y, p.y);
-	s = p.x + p.y;
-	v = s - p.x;
-	e = p.y - v;
-	p.x = -s;
-	p.y = -e;
-	s = x + p.x;
-	q.x = p.y;
-	v = s - x;
-	t = s - v;
-	w = x - t;
-	z = p.x - v;
-	e = w + z;
-	p.x = s;
-	p.y = e;
-	p.y += q.x;
-	s = p.x + p.y;
-	v = s - p.x;
-	e = p.y - v;
-	p.y = e;
-	p.x = s + p.y;
-	p.x *= a;
-	s = b + p.x;
-	v = s - b;
-	t = s - v;
-	w = b - t;
-	z = p.x - v;
-	X.x = s;
-	X.y = w + z;
-	x2 = X.x * X.x;
-	a = 2.0;
-	b = x2 * ((2.0 / 3.0) + 0.4 * x2);
-	s = a + b;
-	p.x = s;
-	v = s - a;
-	p.y = b - v;
-	Z.x = X.x * p.x;
-	Z.y = fma(X.x, p.x, -Z.x);
-	Z.y = fma(X.x, p.y, Z.y);
-	Z.y = fma(X.y, p.x, Z.y);
-	s = Z.x + Z.y;
-	v = s - Z.x;
-	X.y = Z.y - v;
-	X.x = s;
-	Z = X;
-	X = logtable[i];
-	s = X.x + Z.x;
-	q.x = X.y + Z.y;
-	v = s - X.x;
-	t = s - v;
-	w = X.x - t;
-	z = Z.x - v;
-	e = w + z;
-	p.x = s;
-	p.y = e;
-	p.y += q.x;
-	s = p.x + p.y;
-	v = s - p.x;
-	e = p.y - v;
-	p.x = s;
-	p.y = e;
-	return p;
-
+	uint64_t n = ((uint64_t&) x);
+	n >>= 52 - Nbits;
+	n <<= 52 - Nbits;
+	double x0 = (double&) n;
+	double dx = (x - x0) / x0;
+	n = (n & 0xFFFFFFFFFFFFFULL) >> (52 - Nbits);
+	double logxp1 = loghi[n];
+	double logxp2 = loglo[n];
+	double y = dx + 1.0;
+	n = ((uint64_t&) y) & 0xFFFFFFFFFFFFFULL;
+	uint64_t m = 0xFFFFFFFFFFFFFULL;
+	m >>= 52 - Nbits;
+	m <<= 52 - Nbits;
+	n = n & ~m;
+	n >>= 52 - 2 * Nbits;
+	if( n >= (1 << Nbits)) {
+		n = (1<<Nbits) - 1;
+	}
+	double expyp1 = exphi[n];
+	double expyp2 = explo[n];
+	n <<= 52 - 2 * Nbits;
+	n |= (uint64_t) 1023 << 52;
+	double y0 = (double&) n;
+	y0 -= 1.0;
+	logxp2 += dx;
+	double dy = dx - y0;
+//	printf( "%e %e\n", 1.0 - (expyp1 + expyp2), dx);
+	logxp2 += (1.0 + dx) * (expyp1 + expyp2) * (1.0 - dy) - 1.0;
+	return logxp1 + logxp2;
 }
 
-double pow_test(double x, double y) {
-	static double_2 E, LN2;
-	static bool init = false;
-	if (!init) {
-		init = true;
-		E.x = exp(hiprec_real(1));
-		E.y = exp(hiprec_real(1)) - hiprec_real(E.x);
-		LN2.x = log(hiprec_real(2));
-		LN2.y = log(hiprec_real(2)) - hiprec_real(LN2.x);
-	}
-	double_2 Y, P, Q, R, logX;
-	bool inv = y < 0.0;
-	y = fabs(y);
-	int I, J;
-	x = frexp(x, &I);
-	y = frexp(y, &J);
-	x *= 2.0;
-	y *= 2.0;
-	I--;
-	J--;
-	logX = exact_log(x);
-	Y = y;
-	P = double_2(0.25) * (Y * logX - double_2(1.0));
-	Q = exact_exp(P.x) * (double_2(1.0) + double_2(P.y));
-	Q = Q * Q;
-	Q = Q * Q;
-	Q = E * Q;
-	R = Q;
-	P = double_2(0.25) * (Y - double_2(1)) * LN2;
-	Q = exact_exp(P.x) * (double_2(1.0) + double_2(P.y));
-	Q = Q * Q;
-	Q = Q * Q;
-	Q.x *= 2.0;
-	Q.y *= 2.0;
-	P.x = 1.0;
-	P.y = 0.0;
-	if (I < 0) {
-		Q = double_2(1) / Q;
-		I = -I;
-	}
-	for (int n = 0; n < 10; n++) {
-		if (I & 1) {
-			P = P * Q;
-		}
-		Q = Q * Q;
-		I >>= 1;
-	}
-	R = R * P;
-	while (J > 0) {
-		R = R * R;
-		J--;
-	}
-	while (J < 0) {
-		R = sqrt(R);
-		J++;
-	}
-	if (inv) {
-		R = double_2(1) / R;
-	}
-	return R.x + R.y;
-}
 
 int main() {
 	double s, c;
@@ -837,7 +723,7 @@ int main() {
 	timer tm1, tm2;
 	double b = pow_test(3.0, 42.0);
 	bool first = true;
-	for (double x = .000001; x < 1.0e5; x *= 1.1254) {
+	/*	for (double x = .000001; x < 1.0e5; x *= 1.1254) {
 		for (double y = -50.0; y <= 50.0; y += 1.11) {
 			if (!first) {
 				tm1.start();
@@ -859,11 +745,11 @@ int main() {
 	std::sort(errs.begin(), errs.end());
 	printf("%e %e\n", max_err / std::numeric_limits<double>::epsilon(), errs[50 * errs.size() / 100] / std::numeric_limits<double>::epsilon());
 	fclose(fp);
-	return 0;
-	for (double r = -0.5; r < 0.5; r += 0.001) {
-		auto xxx = exact_exp(r);
-		hiprec_real a = hiprec_real(xxx.x) + hiprec_real(xxx.y);
-		hiprec_real b = exp(hiprec_real(r));
+	return 0;*/
+	for (double r = 1.0; r < 2.0; r += 0.001) {
+		auto xxx = exact_log(r);
+		hiprec_real a = hiprec_real(xxx);
+		hiprec_real b = log(hiprec_real(r));
 		max_err = std::max(max_err, fabs((a - b) / a));
 		errs.push_back(abs((a - b) / a));
 
@@ -874,7 +760,7 @@ int main() {
 	printf("%e %e\n", (double) (max_err / std::numeric_limits<double>::epsilon()),
 			(double) (errs[50 * errs.size() / 100] / std::numeric_limits<double>::epsilon()));
 	fclose(fp);
-	//	return 0;
+	return 0;
 	for (double x = 1.0; x < 2.0; x += 0.01) {
 		//		printf("%e %e %e %e\n", x, gamma(x), std::tgamma(x), (gamma(x) -std::tgamma(x))/std::tgamma(x));
 	}
