@@ -563,18 +563,37 @@ public:
 
 };
 
+double_2 sqr(double x) {
+	double_2 p;
+	p.x = x * x;
+	p.y = fma(x, x, -p.x);
+	return p;
+}
+
+double_2 sqrt(double_2 A) {
+	double xn = 1.0 / sqrt(A.x);
+	double yn = A.x * xn;
+	double_2 ynsqr = sqr(yn);
+	double diff = (A - ynsqr).x;
+	double_2 prod;
+	prod.x = xn * diff;
+	prod.y = fma(xn, diff, -prod.x);
+	prod.x *= 0.5;
+	prod.y *= 0.5;
+	prod.x += yn;
+	return double_2::quick_two_sum(prod.x, prod.y);
+}
+
 double_2 exact_exp(double x) {
-	constexpr int M = 20;
-	constexpr int P = 2;
+	constexpr int M = 21;
 	static bool init = false;
 	static double_2 coeff[M];
 	if (!init) {
 		init = true;
-		hiprec_real c0 = hiprec_real(1);
+		double_2 c0 = 1.0;
 		for (int m = 0; m < M; m++) {
 			coeff[m] = c0;
-			coeff[m] = coeff[m] + (c0 - hiprec_real(coeff[m]));
-			c0 /= hiprec_real(m + 1);
+			c0 = c0 / double_2(m + 1);
 		}
 	}
 	double_2 Z, X, S, T;
@@ -583,10 +602,10 @@ double_2 exact_exp(double x) {
 	volatile double w;
 	volatile double z;
 	volatile double e;
-	double t;
+	volatile double t;
 	Z.x = 0.0;
 	Z.y = 0.0;
-	for (int m = M - 1; m > P; m--) {
+	for (int m = M - 1; m > 2; m--) {
 		Z.x = fma(Z.x, x, coeff[m].x);
 	}
 	X.x = x;
@@ -744,6 +763,68 @@ double_2 exact_log(double x) {
 
 }
 
+double pow_test(double x, double y) {
+	static double_2 E, LN2;
+	static bool init = false;
+	if (!init) {
+		init = true;
+		E.x = exp(hiprec_real(1));
+		E.y = exp(hiprec_real(1)) - hiprec_real(E.x);
+		LN2.x = log(hiprec_real(2));
+		LN2.y = log(hiprec_real(2)) - hiprec_real(LN2.x);
+	}
+	double_2 Y, P, Q, R, logX;
+	bool inv = y < 0.0;
+	y = fabs(y);
+	int I, J;
+	x = frexp(x, &I);
+	y = frexp(y, &J);
+	x *= 2.0;
+	y *= 2.0;
+	I--;
+	J--;
+	logX = exact_log(x);
+	Y = y;
+	P = double_2(0.25) * (Y * logX - double_2(1.0));
+	Q = exact_exp(P.x) * (double_2(1.0) + double_2(P.y));
+	Q = Q * Q;
+	Q = Q * Q;
+	Q = E * Q;
+	R = Q;
+	P = double_2(0.25) * (Y - double_2(1)) * LN2;
+	Q = exact_exp(P.x) * (double_2(1.0) + double_2(P.y));
+	Q = Q * Q;
+	Q = Q * Q;
+	Q.x *= 2.0;
+	Q.y *= 2.0;
+	P.x = 1.0;
+	P.y = 0.0;
+	if (I < 0) {
+		Q = double_2(1) / Q;
+		I = -I;
+	}
+	for (int n = 0; n < 10; n++) {
+		if (I & 1) {
+			P = P * Q;
+		}
+		Q = Q * Q;
+		I >>= 1;
+	}
+	R = R * P;
+	while (J > 0) {
+		R = R * R;
+		J--;
+	}
+	while (J < 0) {
+		R = sqrt(R);
+		J++;
+	}
+	if (inv) {
+		R = double_2(1) / R;
+	}
+	return R.x + R.y;
+}
+
 int main() {
 	double s, c;
 	//feenableexcept(FE_DIVBYZERO);
@@ -753,19 +834,33 @@ int main() {
 	FILE* fp = fopen("test.txt", "wt");
 	double max_err = 0.0;
 	std::vector<double> errs;
-	/*for (double x = 1; x < 140.0; x *= (1.0 + 1 * rand1())) {
-	 for (double y = -140.0; y <= 140.0; y += 1 * rand1()) {
-	 double b = pow_test2(x, y);
-	 double a = pow(x, y);
-	 max_err = std::max(max_err, fabs((a - b) / a));
-	 errs.push_back(fabs((a - b) / a));
-	 fprintf(fp, "%.10e %.10e %.10e %.10e %.10e\n", x, y, a, b, (a - b) / a / std::numeric_limits<double>::epsilon());
-	 }
-	 }*/
-//	printf("%e %e\n", max_err / std::numeric_limits<double>::epsilon(), errs[50 * errs.size() / 100] / std::numeric_limits<double>::epsilon());
-//	fclose(fp);
-	//	return 0;
-	for (double r = 0.0; r < 1.0; r += 0.001) {
+	timer tm1, tm2;
+	double b = pow_test(3.0, 42.0);
+	bool first = true;
+	for (double x = .000001; x < 1.0e5; x *= 1.1254) {
+		for (double y = -50.0; y <= 50.0; y += 1.11) {
+			if (!first) {
+				tm1.start();
+			}
+			b = exact_exp(x);
+			if (!first) {
+				tm1.stop();
+			}
+			tm2.start();
+			double a = pow(x, y);
+			tm2.stop();
+			max_err = std::max(max_err, fabs((a - b) / a));
+			errs.push_back(fabs((a - b) / a));
+			fprintf(fp, "%.10e %.10e %.10e %.10e %.10e\n", x, y, a, b, (a - b) / a / std::numeric_limits<double>::epsilon());
+			first = false;
+		}
+	}
+	printf("%e\n", tm1.read() / tm2.read());
+	std::sort(errs.begin(), errs.end());
+	printf("%e %e\n", max_err / std::numeric_limits<double>::epsilon(), errs[50 * errs.size() / 100] / std::numeric_limits<double>::epsilon());
+	fclose(fp);
+	return 0;
+	for (double r = -0.5; r < 0.5; r += 0.001) {
 		auto xxx = exact_exp(r);
 		hiprec_real a = hiprec_real(xxx.x) + hiprec_real(xxx.y);
 		hiprec_real b = exp(hiprec_real(r));
