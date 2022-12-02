@@ -563,9 +563,76 @@ public:
 
 };
 
+double_2 exact_exp(double x) {
+	constexpr int M = 20;
+	constexpr int P = 2;
+	static bool init = false;
+	static double_2 coeff[M];
+	if (!init) {
+		init = true;
+		hiprec_real c0 = hiprec_real(1);
+		for (int m = 0; m < M; m++) {
+			coeff[m] = c0;
+			coeff[m] = coeff[m] + (c0 - hiprec_real(coeff[m]));
+			c0 /= hiprec_real(m + 1);
+		}
+	}
+	double_2 Z, X, S, T;
+	volatile double s;
+	volatile double v;
+	volatile double w;
+	volatile double z;
+	volatile double e;
+	double t;
+	Z.x = 0.0;
+	Z.y = 0.0;
+	for (int m = M - 1; m > P; m--) {
+		Z.x = fma(Z.x, x, coeff[m].x);
+	}
+	X.x = x;
+	X.y = 0.0;
+	t = Z.x * X.x;
+	Z.y = fma(Z.x, X.x, -t);
+	Z.x = t;
+	s = 0.5 + Z.x;
+	v = s - 0.5;
+	e = Z.x - v;
+	S.x = s;
+	S.y = e;
+	S.y += Z.y;
+	s = S.x + S.y;
+	v = s - S.x;
+	e = S.y - v;
+	Z.x = s;
+	Z.y = e;
+	for (int n = 0; n < 2; n++) {
+		t = Z.x * X.x;
+		e = fma(Z.x, X.x, -t);
+		e = fma(Z.y, X.x, e);
+		Z.x = t;
+		Z.y = e;
+		s = Z.x + Z.y;
+		v = s - Z.x;
+		e = Z.y - v;
+		Z.x = s;
+		Z.y = e;
+		s = 1.0 + Z.x;
+		v = s - 1.0;
+		e = Z.x - v;
+		S.x = s;
+		S.y = e;
+		S.y += Z.y;
+		s = S.x + S.y;
+		v = s - S.x;
+		e = S.y - v;
+		Z.x = s;
+		Z.y = e;
+	}
+	return Z;
+}
+
 double_2 exact_log(double x) {
 	constexpr int Nbitslog2 = 11;
-	constexpr int Mlog2 = 2;
 	constexpr int Nlog2 = 1 << Nbitslog2;
 	constexpr std::uint64_t log2mask1 = (0xFFFFFFFFFFFFFFFFULL >> (52 - Nbitslog2)) << (52 - Nbitslog2);
 	constexpr std::uint64_t log2mask2 = (0xFFFFFFFFFFFFFULL >> (52 - Nbitslog2)) << (52 - Nbitslog2);
@@ -698,10 +765,10 @@ int main() {
 //	printf("%e %e\n", max_err / std::numeric_limits<double>::epsilon(), errs[50 * errs.size() / 100] / std::numeric_limits<double>::epsilon());
 //	fclose(fp);
 	//	return 0;
-	for (double r = 1.0000000001; r < 2.0; r *= 1.0001) {
-		auto xxx = exact_log(r);
+	for (double r = 0.0; r < 1.0; r += 0.001) {
+		auto xxx = exact_exp(r);
 		hiprec_real a = hiprec_real(xxx.x) + hiprec_real(xxx.y);
-		hiprec_real b = log(hiprec_real(r));
+		hiprec_real b = exp(hiprec_real(r));
 		max_err = std::max(max_err, fabs((a - b) / a));
 		errs.push_back(abs((a - b) / a));
 
