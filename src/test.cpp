@@ -584,70 +584,88 @@ double_2 sqrt(double_2 A) {
 	return double_2::quick_two_sum(prod.x, prod.y);
 }
 
-double_2 exact_exp(double x) {
-	constexpr int M = 21;
+namespace simd {
+simd_f64 pow(simd_f64 x1, simd_f64 y) {
+	static std::once_flag once;
+	static constexpr int Nbits = 14;
+	static constexpr int N = 1 << Nbits;
+	static double loghitable[N];
+	static double loglotable[N];
+	static double expm1table[N];
+	static double LN2hi = log(hiprec_real(2));
+	static double LN2lo = log(hiprec_real(2)) - hiprec_real(LN2hi);
+	static simd_f64 ln2x;
+	static simd_f64 ln2y;
+	static simd_f64 ax;
+	static simd_f64 ay;
 	static bool init = false;
-	static double_2 coeff[M];
 	if (!init) {
+		for (int n = 0; n < N; n++) {
+			std::uint64_t ai = ((std::uint64_t) n << (52 - Nbits)) | ((std::uint64_t)(1023) << 52);
+			double x = (double&) ai;
+			ai = ((std::uint64_t) n << (52 - 2 * Nbits)) | ((std::uint64_t)(1023) << 52);
+			double y = (double&) ai;
+			y -= 1.0;
+			hiprec_real log_exact = log(hiprec_real(x));
+			hiprec_real exp_exact = exp(hiprec_real(y)) - hiprec_real(1);
+			loghitable[n] = log_exact;
+			expm1table[n] = exp_exact;
+			loglotable[n] = log_exact - hiprec_real(loghitable[n]);
+			hiprec_real exact = log2(exp(hiprec_real(1)));
+			ax = simd_f64(exact);
+			ay = simd_f64(exact - hiprec_real((double) exact));
+	}
+		ln2x = LN2hi;
+		ln2y = LN2lo;
 		init = true;
-		double_2 c0 = 1.0;
-		for (int m = 0; m < M; m++) {
-			coeff[m] = c0;
-			c0 = c0 / double_2(m + 1);
-		}
 	}
-	double_2 Z, X, S, T;
-	volatile double s;
-	volatile double v;
-	volatile double w;
-	volatile double z;
-	volatile double e;
-	volatile double t;
-	Z.x = 0.0;
-	Z.y = 0.0;
-	for (int m = M - 1; m > 2; m--) {
-		Z.x = fma(Z.x, x, coeff[m].x);
-	}
-	X.x = x;
-	X.y = 0.0;
-	t = Z.x * X.x;
-	Z.y = fma(Z.x, X.x, -t);
-	Z.x = t;
-	s = 0.5 + Z.x;
-	v = s - 0.5;
-	e = Z.x - v;
-	S.x = s;
-	S.y = e;
-	S.y += Z.y;
-	s = S.x + S.y;
-	v = s - S.x;
-	e = S.y - v;
-	Z.x = s;
-	Z.y = e;
-	for (int n = 0; n < 2; n++) {
-		t = Z.x * X.x;
-		e = fma(Z.x, X.x, -t);
-		e = fma(Z.y, X.x, e);
-		Z.x = t;
-		Z.y = e;
-		s = Z.x + Z.y;
-		v = s - Z.x;
-		e = Z.y - v;
-		Z.x = s;
-		Z.y = e;
-		s = 1.0 + Z.x;
-		v = s - 1.0;
-		e = Z.x - v;
-		S.x = s;
-		S.y = e;
-		S.y += Z.y;
-		s = S.x + S.y;
-		v = s - S.x;
-		e = S.y - v;
-		Z.x = s;
-		Z.y = e;
-	}
-	return Z;
+	simd_f64 x = x1;
+	simd_f64 result, invy, ifloat, x0, dx, y1, y2, one, logx, logy, yt1, zx, zy, argx, argy, yt2, yp1, e0, ddx, ddy, y0, dy, tmp, e1x, e1y, e2x, e2y;
+	simd_i64 I, index, n, m;
+	simd_f64_2 ONE, HALF, X0, X, Y, Z, DX, DY, Y0, Y1, Y2, E0, E1, D, TMP, LOGX, YLOGX;
+	ONE = 1.0;
+	HALF = 0.5;
+	invy = y < simd_f64(0);
+	y = abs(y);
+	simd_f64 xo = x;
+	x = frexp(x, &I);
+	x *= simd_f64(2);
+	I = I - simd_f64(1);
+	n = (simd_i64&) x;
+	n >>= 52 - Nbits;
+	n <<= 52 - Nbits;
+	X = x;
+	X0 = (simd_f64&) n;
+	DX = (X - X0) / X0;
+	index = (n & simd_f64(0xFFFFFFFFFFFFFULL)) >> (52 - Nbits);
+	Y1 = DX;
+	yp1 = Y1.x + simd_f64(1);
+	n = ((simd_i64&) yp1) & simd_i64(0xFFFFFFFFFFFFFULL);
+	m = simd_i64(0xFFFFFFFFFFFFFULL);
+	m >>= 52 - Nbits;
+	m <<= 52 - Nbits;
+	n = n & ~m;
+	n >>= 52 - 2 * Nbits;
+	e0.gather(expm1table, n);
+	n <<= 52 - 2 * Nbits;
+	n |= simd_i64(1023ULL) << 52;
+	Y0 = (simd_f64&) n;
+	Y0 = Y0 - ONE;
+	DY = Y1 - Y0;
+	E0 = e0;
+	Y1 = Y1 + (ONE + DX) / ((ONE + E0) * (ONE + DY + HALF * DY * DY)) - ONE;
+//	printf( "%e\n", E1.x[0]);
+//	printf( "%e\n", D.x[0]);
+	yt1.gather(loghitable, index);
+	yt2.gather(loglotable, index);
+	Y2 = simd_f64_2::quick_two_sum(yt1, yt2);
+	LOGX = Y1 + Y2;
+	LOGX = LOGX + simd_f64_2(simd_f64(I)) * simd_f64_2::quick_two_sum(ln2x, ln2y);
+	YLOGX = LOGX * simd_f64_2(simd_f64(y));
+	result = exp(YLOGX.x) * (simd_f64(1) + YLOGX.y);
+	result = blend(result, simd_f64(1) / result, invy);
+	return result;
+}
 }
 
 double_2 exact_log(double x) {
@@ -660,7 +678,6 @@ double_2 exact_log(double x) {
 	static double loghitable[N];
 	static double loglotable[N];
 	static double expm1hitable[N];
-	static double expm1lotable[N];
 	static bool init = false;
 	if (!init) {
 		init = true;
@@ -675,10 +692,11 @@ double_2 exact_log(double x) {
 			loghitable[n] = log_exact;
 			expm1hitable[n] = exp_exact;
 			loglotable[n] = log_exact - hiprec_real(loghitable[n]);
-			expm1lotable[n] = exp_exact - hiprec_real(expm1hitable[n]);
-			//		printf( "%e %e %e | %e %e %e\n", x, loghi[n], loglo[n], y, exphi[n], explo[n]);
 		}
 	}
+	volatile double s;
+	volatile double v;
+	volatile double e;
 	uint64_t index;
 	uint64_t n = ((uint64_t&) x);
 	n >>= 52 - Nbits;
@@ -690,9 +708,7 @@ double_2 exact_log(double x) {
 	index = n;
 	constexpr int M = 0;
 	Y = DX;
-	volatile double s;
-	volatile double v;
-	volatile double e;
+	double_2 D;
 	double yp1 = Y.x + Y.y + 1.0;
 	n = ((uint64_t&) yp1) & 0xFFFFFFFFFFFFFULL;
 	uint64_t m = 0xFFFFFFFFFFFFFULL;
@@ -704,7 +720,6 @@ double_2 exact_log(double x) {
 		n = (1 << Nbits) - 1;
 	}
 	double expm1p1 = expm1hitable[n];
-	double expm1p2 = expm1lotable[n];
 	n <<= 52 - 2 * Nbits;
 	n |= (uint64_t) 1023 << 52;
 	double y0 = (double&) n;
@@ -726,7 +741,6 @@ double_2 exact_log(double x) {
 	e = tmp - v;
 	E2.x = s;
 	E2.y = e;
-	double_2 D;
 	D.x = E1.x * E2.x;
 	D.y = fma(E1.x, E2.x, -D.x);
 	D.y = fma(E1.x, E2.y, D.y);
@@ -799,12 +813,12 @@ int main() {
 			if (!first) {
 				tm1.start();
 			}
-			b = pow_test(x, y);
+			b = pow(simd_f64(x),simd_f64(y))[0];
 			if (!first) {
 				tm1.stop();
 			}
 			tm2.start();
-			double a = pow(x, y);
+			double a = pow(hiprec_real(x), hiprec_real(y));
 			tm2.stop();
 			max_err = std::max(max_err, fabs((a - b) / a));
 			errs.push_back(fabs((a - b) / a));
@@ -812,10 +826,12 @@ int main() {
 			first = false;
 		}
 	}
-	printf("%e\n", tm1.read() / tm2.read());
+	//printf("%e\n", tm1.read() / tm2.read());
+	TEST2(double, simd_f64, pow, pow, pow, 1, 1e3, 1, 10, true);
 	std::sort(errs.begin(), errs.end());
 	printf("%e %e\n", max_err / std::numeric_limits<double>::epsilon(), errs[50 * errs.size() / 100] / std::numeric_limits<double>::epsilon());
 	fclose(fp);
+	return 0;
 	max_err = 0.0;
 	errs.resize(0);
 	for (double r = 1.0 + (0x1) * std::numeric_limits<double>::epsilon(); r < 2.0; r += 0.001) {
@@ -862,7 +878,6 @@ int main() {
 		return double(i);
 	};
 //	TEST2(float, simd_f32, pow, powf, pow, 1e-3, 1e3, .01, 10, true);
-	TEST2(double, simd_f64, pow, pow, pow, 1, 1e3, 1, 10, true);
 	/*	TEST1(double, simd_f64, exp, exp, exp, -600.0, 600.0, true);
 	 TEST1(float, simd_f32, tgamma, tgammaf, tgamma, 0.5, 5.0, true);
 	 TEST1(double, simd_f64, tgamma, tgamma, tgamma, 0.5, 10.0, true);

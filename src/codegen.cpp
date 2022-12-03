@@ -1285,7 +1285,7 @@ void double_funcs(FILE* fp) {
 	}
 
 	/* pow */
-	{
+	/*{
 		fprintf(fp, "\nsimd_f64 pow(simd_f64 x, simd_f64 y) {\n");
 		constexpr int Nlogbits = 16;
 		constexpr int Mparam = 5;
@@ -1369,7 +1369,7 @@ void double_funcs(FILE* fp) {
 		fprintf(fp, "\tz = blend(z, simd_f64(1) / z, invy);\n");
 		fprintf(fp, "\treturn z;\n");
 		fprintf(fp, "}\n");
-	}
+	}*/
 }
 
 /*void two_sum(simd_f64* xptr, simd_f64* yptr, simd_f64 a, simd_f64 b) {

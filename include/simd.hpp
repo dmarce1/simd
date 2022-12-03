@@ -598,6 +598,8 @@ inline simd_f32 frexp(simd_f32 x, simd_i32* e) {
 	i -= simd_i32(127);
 	*e = i;
 	y = (simd_f32&) j;
+	(*e) = (*e) + simd_i32(1);
+	y *= simd_f32(0.5);
 	return y;
 }
 
@@ -1142,13 +1144,15 @@ inline simd_f64 frexp(simd_f64 x, simd_i64* e) {
 	simd_i64 i, j;
 	simd_f64 y;
 	i = (simd_i64&) x;
-	j = i & simd_i64(0x800FFFFFFFFFFFFF);
-	j |= simd_i64(1023ULL << 23ULL);
-	i &= simd_i64(0x7FF0000000000000);
+	j = i & simd_i64(0x800FFFFFFFFFFFFFULL);
+	j |= simd_i64(1023ULL << 52ULL);
+	i &= simd_i64(0x7FF0000000000000ULL);
 	i >>= (long long) (52);
 	i -= simd_i64(1023);
 	*e = i;
 	y = (simd_f64&) j;
+	(*e) = (*e) + simd_i64(1);
+	y *= simd_f64(0.5);
 	return y;
 }
 
