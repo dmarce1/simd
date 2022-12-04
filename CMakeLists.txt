@@ -24,7 +24,7 @@ execute_process(
 FILE(GLOB SRC_FILES ${CMAKE_CURRENT_BINARY_DIR}/generated_code/src/*.cpp)
 add_library(simd ${SRC_FILES} ${GENERATED_HEADER_FILES})
 target_include_directories(simd PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_BINARY_DIR}/generated_code/include)
-target_compile_options(simd PUBLIC -march=native -ffast-math)
+target_compile_options(simd PUBLIC -march=native)
 set_target_properties(simd PROPERTIES PUBLIC_HEADER "include/simd.hpp")
 #add_compile_options(-g -fsanitize=address)
 #add_link_options(-fsanitize=address)
@@ -32,7 +32,7 @@ set_target_properties(simd PROPERTIES PUBLIC_HEADER "include/simd.hpp")
 add_executable(simd_test ${CMAKE_CURRENT_SOURCE_DIR}/src/test.cpp )
 target_include_directories(simd_test PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_BINARY_DIR}/generated_code/include)
 target_link_libraries(simd_test PUBLIC simd pthread mpfr gmp)
-target_compile_options(simd_test PUBLIC -pthread -ffast-math -march=native)
+target_compile_options(simd_test PUBLIC -pthread -march=native)
 install(TARGETS simd_test DESTINATION bin)
 INSTALL(TARGETS simd 
         LIBRARY DESTINATION simd

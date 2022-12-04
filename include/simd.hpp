@@ -1216,42 +1216,34 @@ inline simd_f64 modf(simd_f64 x, simd_f64* i) {
 struct simd_f64_2 {
 	simd_f64 x;
 	simd_f64 y;
-	static inline simd_f64_2 quick_two_sum(simd_f64 a_, simd_f64 b_) {
+	static inline simd_f64_2 __attribute__((optimize("O3"))) quick_two_sum(simd_f64 a_, simd_f64 b_) {
 		simd_f64_2 r;
-		volatile __m256d a = a_.v;
-		volatile __m256d b = b_.v;
-		volatile __m256d s = _mm256_add_pd(a, b);
-		volatile __m256d tmp = _mm256_sub_pd(s, a);
-		volatile __m256d e = _mm256_sub_pd(b, tmp);
-		r.x.v = s;
-		r.y.v = e;
+		const __m256d& a = a_.v;
+		const __m256d& b = b_.v;
+		r.x.v = _mm256_add_pd(a, b);
+		r.y.v = _mm256_sub_pd(r.x.v, a);
+		r.y.v = _mm256_sub_pd(b, r.y.v);
+		return r;
+
+	}
+	static inline simd_f64_2 __attribute__((optimize("O3"))) two_sum(simd_f64 a_, simd_f64 b_) {
+		simd_f64_2 r;
+		const __m256d& a = a_.v;
+		const __m256d& b = b_.v;
+		__m256d& s = r.x.v;
+		__m256d& e = r.y.v;
+		s = _mm256_add_pd(a, b);
+		const __m256d v = _mm256_sub_pd(s, a);
+		e = _mm256_sub_pd(s, v);
+		e = _mm256_add_pd(_mm256_sub_pd(a, e), _mm256_sub_pd(b, v));
 		return r;
 	}
-	static inline simd_f64_2 two_sum(simd_f64 a_, simd_f64 b_) {
+	static inline simd_f64_2 __attribute__((optimize("O3"))) two_product(simd_f64 a_, simd_f64 b_) {
 		simd_f64_2 r;
-		volatile __m256d a = a_.v;
-		volatile __m256d b = b_.v;
-		volatile __m256d s = _mm256_add_pd(a, b);
-		volatile __m256d v = _mm256_sub_pd(s, a);
-		volatile __m256d tmp1 = _mm256_sub_pd(s, v);
-		volatile __m256d tmp2 = _mm256_sub_pd(a, tmp1);
-		volatile __m256d tmp3 = _mm256_sub_pd(b, v);
-		volatile __m256d e = _mm256_add_pd(tmp2, tmp3);
-		r.x.v = s;
-		r.y.v = e;
-		return r;
-	}
-	static inline simd_f64_2 two_product(simd_f64 a_, simd_f64 b_) {
-		simd_f64_2 r;
-		const static double zero = 0.0;
-		volatile __m256d z = _mm256_broadcast_sd(&zero);
-		volatile __m256d a = a_.v;
-		volatile __m256d b = b_.v;
-		volatile __m256d xx = _mm256_mul_pd(a, b);
-		volatile __m256d zz = _mm256_sub_pd(z, xx);
-		volatile __m256d yy = _mm256_fmadd_pd(a, b, zz);
-		r.x.v = xx;
-		r.y.v = yy;
+		const __m256d& a = a_.v;
+		const __m256d& b = b_.v;
+		r.x.v = _mm256_mul_pd(a, b);
+		r.y.v = _mm256_fmsub_pd(a, b, r.x.v);
 		return r;
 	}
 public:
@@ -1269,6 +1261,13 @@ public:
 	inline operator simd_f64() const {
 		return x + y;
 	}
+	inline simd_f64_2 operator+(simd_f64 other) const {
+		simd_f64_2 s;
+		s = two_sum(x, other);
+		s.y += y;
+		s = quick_two_sum(s.x, s.y);
+		return s;
+	}
 	inline simd_f64_2 operator+(simd_f64_2 other) const {
 		simd_f64_2 s, t;
 		s = two_sum(x, other.x);
@@ -1278,6 +1277,13 @@ public:
 		s.y += t.y;
 		s = quick_two_sum(s.x, s.y);
 		return s;
+	}
+	inline simd_f64_2 operator*(simd_f64 other) const {
+		simd_f64_2 p;
+		p = two_product(x, other);
+		p.y = fma(y, other, p.y);
+		p = quick_two_sum(p.x, p.y);
+		return p;
 	}
 	inline simd_f64_2 operator*(simd_f64_2 other) const {
 		simd_f64_2 p;
@@ -1395,7 +1401,6 @@ public:
 
 simd_f64_2 log2_ext(simd_f64 x);
 simd_f64_2 log1p_ext(simd_f64 x);
-
 
 }
 
