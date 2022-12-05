@@ -238,4 +238,97 @@ hiprec_real exp2(hiprec_real a) {
 	return b;
 }
 
+
+struct double_2 {
+	double x;
+	double y;
+	static inline double_2 quick_two_sum(double a_, double b_) {
+		double_2 r;
+		volatile double a = a_;
+		volatile double b = b_;
+		volatile double s = a + b;
+		volatile double tmp = s - a;
+		volatile double e = b - tmp;
+		r.x = s;
+		r.y = e;
+		return r;
+	}
+	static inline double_2 two_sum(double a_, double b_) {
+		double_2 r;
+		volatile double a = a_;
+		volatile double b = b_;
+		volatile double s = a + b;
+		volatile double v = s - a;
+		volatile double tmp1 = s - v;
+		volatile double tmp2 = a - tmp1;
+		volatile double tmp3 = b - v;
+		volatile double e = tmp2 + tmp3;
+		r.x = s;
+		r.y = e;
+		return r;
+	}
+	static inline double_2 two_product(double a_, double b_) {
+		double_2 r;
+		const static double zero = 0.0;
+		volatile double a = a_;
+		volatile double b = b_;
+		volatile double xx = a * b;
+		volatile double yy = std::fma(a, b, -xx);
+		r.x = xx;
+		r.y = yy;
+		return r;
+	}
+public:
+	inline double_2& operator=(double a) {
+		x = a;
+		y = 0.0;
+		return *this;
+	}
+	inline double_2(double a) {
+		*this = a;
+	}
+	inline double_2() {
+	}
+	inline operator double() const {
+		return x + y;
+	}
+	inline double_2 operator+(double_2 other) const {
+		double_2 s, t;
+		s = two_sum(x, other.x);
+		t = two_sum(y, other.y);
+		s.y += t.x;
+		s = quick_two_sum(s.x, s.y);
+		s.y += t.y;
+		s = quick_two_sum(s.x, s.y);
+		return s;
+	}
+	inline double_2 operator*(double_2 other) const {
+		double_2 p;
+		p = two_product(x, other.x);
+		p.y += x * other.y;
+		p.y += y * other.x;
+		p = quick_two_sum(p.x, p.y);
+		return p;
+	}
+	inline double_2 operator-() const {
+		double_2 r;
+		r.x = -x;
+		r.y = -y;
+		return r;
+	}
+	inline double_2 operator/(const double_2 A) const {
+		double_2 result;
+		double xn = double(1) / A.x;
+		double yn = x * xn;
+		double_2 diff = (*this - A * double_2(yn));
+		double_2 prod = two_product(xn, diff);
+		return double_2(yn) + prod;
+	}
+	inline double_2 operator-(double_2 other) const {
+		return *this + -other;
+	}
+
+};
+
+
 #endif /* HIPREC_HPP_ */

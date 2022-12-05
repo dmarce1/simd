@@ -472,97 +472,6 @@ struct double3 {
 	double x, y, z;
 };
 
-struct double_2 {
-	double x;
-	double y;
-	static inline double_2 quick_two_sum(double a_, double b_) {
-		double_2 r;
-		volatile double a = a_;
-		volatile double b = b_;
-		volatile double s = a + b;
-		volatile double tmp = s - a;
-		volatile double e = b - tmp;
-		r.x = s;
-		r.y = e;
-		return r;
-	}
-	static inline double_2 two_sum(double a_, double b_) {
-		double_2 r;
-		volatile double a = a_;
-		volatile double b = b_;
-		volatile double s = a + b;
-		volatile double v = s - a;
-		volatile double tmp1 = s - v;
-		volatile double tmp2 = a - tmp1;
-		volatile double tmp3 = b - v;
-		volatile double e = tmp2 + tmp3;
-		r.x = s;
-		r.y = e;
-		return r;
-	}
-	static inline double_2 two_product(double a_, double b_) {
-		double_2 r;
-		const static double zero = 0.0;
-		volatile double a = a_;
-		volatile double b = b_;
-		volatile double xx = a * b;
-		volatile double yy = std::fma(a, b, -xx);
-		r.x = xx;
-		r.y = yy;
-		return r;
-	}
-public:
-	inline double_2& operator=(double a) {
-		x = a;
-		y = 0.0;
-		return *this;
-	}
-	inline double_2(double a) {
-		*this = a;
-	}
-	inline double_2() {
-	}
-	inline operator double() const {
-		return x + y;
-	}
-	inline double_2 operator+(double_2 other) const {
-		double_2 s, t;
-		s = two_sum(x, other.x);
-		t = two_sum(y, other.y);
-		s.y += t.x;
-		s = quick_two_sum(s.x, s.y);
-		s.y += t.y;
-		s = quick_two_sum(s.x, s.y);
-		return s;
-	}
-	inline double_2 operator*(double_2 other) const {
-		double_2 p;
-		p = two_product(x, other.x);
-		p.y += x * other.y;
-		p.y += y * other.x;
-		p = quick_two_sum(p.x, p.y);
-		return p;
-	}
-	inline double_2 operator-() const {
-		double_2 r;
-		r.x = -x;
-		r.y = -y;
-		return r;
-	}
-	inline double_2 operator/(const double_2 A) const {
-		double_2 result;
-		double xn = double(1) / A.x;
-		double yn = x * xn;
-		double_2 diff = (*this - A * double_2(yn));
-		double_2 prod = two_product(xn, diff);
-		return double_2(yn) + prod;
-	}
-	inline double_2 operator-(double_2 other) const {
-		return *this + -other;
-	}
-
-};
-
 double_2 sqr(double x) {
 	double_2 p;
 	p.x = x * x;
@@ -585,6 +494,47 @@ double_2 sqrt(double_2 A) {
 }
 
 namespace simd {
+
+simd_f64 pow_precise(simd_f64 x, simd_f64 z) {
+	constexpr int M = 10;
+	static simd_f64_2 coeff[M];
+	static const double log2 = std::log(2);
+	static bool init = false;
+	if (!init) {
+		init = true;
+		for (int m = 0; m < M; m++) {
+			hiprec_real exact = (hiprec_real(2) / (hiprec_real(2 * m + 1))) / log(hiprec_real(2));
+			double cox = exact;
+			double coy = exact - hiprec_real(cox);
+			coeff[m] = simd_f64_2::quick_two_sum(simd_f64(cox), simd_f64(coy));
+		}
+	}
+	simd_f64 y, y2, x2, x0;
+	simd_f64_2 X, Y, X2;
+	simd_i64 i, j, k;
+	x0 = x * simd_f64(M_SQRT2);
+	j = ((simd_i64&) x0 & simd_i64(0x7FF0000000000000ULL));
+	k = ((simd_i64&) x & simd_i64(0x7FF0000000000000ULL));
+	j >>= simd_i64(52);
+	k >>= simd_i64(52);
+	j -= simd_i64(1023);
+	k -= j;
+	k <<= simd_i64(52);
+	i = (simd_i64&) x;
+	i = (i & simd_i64(0xFFFFFFFFFFFFFULL)) | k;
+	X = (simd_f64&) i;
+	X = (X - simd_f64(1)) / (X + simd_f64(1));
+	x2 = X.x * X.x;
+	y = coeff[M - 1].x;
+	for (int m = M - 2; m >= 1; m--) {
+		y = fma(y, x2, coeff[m].x);
+	}
+	Y = y;
+	Y = X * (simd_f64_2::two_product(y, x2) + coeff[0]) + simd_f64(j);
+	simd_f64_2 YLOG2X = z * Y;
+	return (exp2(YLOG2X.x) * (simd_f64(1) + simd_f64(log2) * YLOG2X.y));
+}
+/*
 simd_f64 pow(simd_f64 x1, simd_f64 y) {
 	static std::once_flag once;
 	static constexpr int Nbits = 14;
@@ -614,7 +564,7 @@ simd_f64 pow(simd_f64 x1, simd_f64 y) {
 			hiprec_real exact = log2(exp(hiprec_real(1)));
 			ax = simd_f64(exact);
 			ay = simd_f64(exact - hiprec_real((double) exact));
-	}
+		}
 		ln2x = LN2hi;
 		ln2y = LN2lo;
 		init = true;
@@ -662,7 +612,7 @@ simd_f64 pow(simd_f64 x1, simd_f64 y) {
 	DY.x = DY.x * (DY.x * HALF + ONE);
 	D.x = (E0.x + ONE) * (DY.x + ONE);
 	DY.y = D.y = 0.0;
-	Y1.x = Y1.x + (DX.x - E0.x  - DY.x - E0.x * DY.x) / D.x;
+	Y1.x = Y1.x + (DX.x - E0.x - DY.x - E0.x * DY.x) / D.x;
 	Y1.y = 0.0;
 	yt1.gather(loghitable, index);
 	yt2.gather(loglotable, index);
@@ -673,7 +623,7 @@ simd_f64 pow(simd_f64 x1, simd_f64 y) {
 	result = exp(YLOGX.x) * (simd_f64(1) + YLOGX.y);
 	result = blend(result, simd_f64(1) / result, invy);
 	return result;
-}
+}*/
 }
 
 double_2 exact_log(double x) {
@@ -814,14 +764,14 @@ int main() {
 	double max_err = 0.0;
 	std::vector<double> errs;
 	timer tm1, tm2;
-	double b = pow_test(3.0, 42.0);
+	double b = pow_precise(simd_f64(3.0), simd_f64(42.0))[0];
 	bool first = true;
-	for (double x = .000001; x < 1.0e5; x *= 1.1254) {
-		for (double y = -50.0; y <= 50.0; y += 1.11) {
+	for (double x = .1; x < 10.0; x *= 1.1254) {
+		for (double y = -300.0; y <= 300.0; y += 1.11) {
 			if (!first) {
 				tm1.start();
 			}
-			b = pow(simd_f64(x),simd_f64(y))[0];
+			b = pow_precise(simd_f64(x), simd_f64(y))[0];
 			if (!first) {
 				tm1.stop();
 			}
@@ -835,28 +785,26 @@ int main() {
 		}
 	}
 	//printf("%e\n", tm1.read() / tm2.read());
-	TEST2(double, simd_f64, pow, pow, pow, 1, 1e3, 1, 10, true);
 	std::sort(errs.begin(), errs.end());
 	printf("%e %e\n", max_err / std::numeric_limits<double>::epsilon(), errs[50 * errs.size() / 100] / std::numeric_limits<double>::epsilon());
-	fclose(fp);
-	return 0;
-	max_err = 0.0;
-	errs.resize(0);
-	for (double r = 1.0 + (0x1) * std::numeric_limits<double>::epsilon(); r < 2.0; r += 0.001) {
-		auto xxx = exact_log(r);
-		hiprec_real a = hiprec_real(xxx.x) + hiprec_real(xxx.y);
-		hiprec_real b = log(hiprec_real(r));
-		max_err = std::max(max_err, fabs((a - b) / a));
-		errs.push_back(abs((a - b) / a));
+	fclose(fp);/*
+	 max_err = 0.0;
+	 errs.resize(0);
+	 for (double r = 1.0 + (0x1) * std::numeric_limits<double>::epsilon(); r < 2.0; r += 0.001) {
+	 auto xxx = log2_precise(r);
+	 hiprec_real a = hiprec_real(xxx.x[0]) + hiprec_real(xxx.y[0]);
+	 hiprec_real b = log2(hiprec_real(r));
+	 max_err = std::max(max_err, fabs((a - b) / a));
+	 errs.push_back(abs((a - b) / a));
 
-		fprintf(fp, "%.10e %.10e %.10e %.10e\n", (double) r, (double) a, (double) (a - b),
-				(double) ((a - b) / a / hiprec_real(std::numeric_limits<double>::epsilon())));
-	}
-	std::sort(errs.begin(), errs.end());
-	printf("%e %e\n", (double) (max_err / std::numeric_limits<double>::epsilon()),
-			(double) (errs[50 * errs.size() / 100] / std::numeric_limits<double>::epsilon()));
-	fclose(fp);
-	return 0;
+	 fprintf(fp, "%.10e %.10e %.10e %.10e\n", (double) r, (double) a, (double) (a - b),
+	 (double) ((a - b) / a / hiprec_real(std::numeric_limits<double>::epsilon())));
+	 }
+	 std::sort(errs.begin(), errs.end());
+	 printf("%e %e\n", (double) (max_err / std::numeric_limits<double>::epsilon()),
+	 (double) (errs[50 * errs.size() / 100] / std::numeric_limits<double>::epsilon()));
+	 fclose(fp);
+	 return 0;*/
 	for (double x = 1.0; x < 2.0; x += 0.01) {
 		//		printf("%e %e %e %e\n", x, gamma(x), std::tgamma(x), (gamma(x) -std::tgamma(x))/std::tgamma(x));
 	}
@@ -886,17 +834,16 @@ int main() {
 		return double(i);
 	};
 //	TEST2(float, simd_f32, pow, powf, pow, 1e-3, 1e3, .01, 10, true);
-	/*	TEST1(double, simd_f64, exp, exp, exp, -600.0, 600.0, true);
-	 TEST1(float, simd_f32, tgamma, tgammaf, tgamma, 0.5, 5.0, true);
+	//TEST1(double, simd_f64, log2, log2, log2_precise, .0001, 100000, true);
+//	TEST1(double, simd_f64, exp, exp, exp, -600.0, 600.0, true);
+	/*TEST1(float, simd_f32, tgamma, tgammaf, tgamma, 0.5, 5.0, true);
 	 TEST1(double, simd_f64, tgamma, tgamma, tgamma, 0.5, 10.0, true);
 
 	 printf("Testing SIMD Functions\n");
 	 printf("\nSingle Precision\n");
-	 printf("name   speed        avg err      max err\n");
+	 printf("name   speed        avg err      max err\n");*/
 
-	 TEST1(float, simd_f32, cosh, coshf, cosh, -10.0, 10.0, true);
-	 TEST1(float, simd_f32, sinh, sinhf, sinh, -10.0, 10.0, true);
-	 TEST1(float, simd_f32, tanh, tanhf, tanh, -10.0, 10.0, true);
+	 TEST2(float, simd_f32, pow, pow, pow, .1, 10, -30, 30, true);
 	 TEST1(float, simd_f32, exp, expf, exp, -86.0, 86.0, true);
 	 TEST1(float, simd_f32, exp2, exp2f, exp2, -125.0, 125.0, true);
 	 TEST1(float, simd_f32, expm1, expm1f, expm1, -2.0, 2.0, true);
@@ -905,15 +852,16 @@ int main() {
 	 TEST1(float, simd_f32, log1p, log1pf, log1p, exp(-3), exp(3), true);
 	 TEST1(float, simd_f32, erf, erff, erf, -7, 7, true);
 	 TEST1(float, simd_f32, erfc, erfcf, erfc, -8.9, 8.9, true);
-
+	 TEST1(float, simd_f32, cosh, coshf, cosh, -10.0, 10.0, true);
+	 TEST1(float, simd_f32, sinh, sinhf, sinh, -10.0, 10.0, true);
+	 TEST1(float, simd_f32, tanh, tanhf, tanh, -10.0, 10.0, true);
 	 TEST1(float, simd_f32, sin, sinf, sin, -2 * M_PI, 2 * M_PI, true);
 	 TEST1(float, simd_f32, cos, cosf, cos, -2 * M_PI, 2 * M_PI, true);
 	 TEST1(float, simd_f32, tan, tanf, tan, -2 * M_PI, 2 * M_PI, true);
-
 	 TEST1(float, simd_f32, asin, asinf, asin, -1, 1, true);
 	 TEST1(float, simd_f32, acos, acosf, acos, -1, 1, true);
 	 TEST1(float, simd_f32, atan, atanf, atan, -10.0, 10.0, true);
-	 */
+
 	/*
 	 TEST1(float, simd_f32, acosh, acoshf, acosh, 1.001, 10.0, true);
 	 TEST1(float, simd_f32, asinh, asinhf, asinh, .001, 10, true);
@@ -926,9 +874,7 @@ int main() {
 	printf("\nDouble Precision\n");
 	printf("name   speed        avg err      max err\n");
 
-	TEST1(double, simd_f64, cosh, cosh, cosh, -10.0, 10.0, true);
-	TEST1(double, simd_f64, sinh, sinh, sinh, -10.0, 10.0, true);
-	TEST1(double, simd_f64, tanh, tanh, tanh, -10.0, 10.0, true);
+	TEST2(double, simd_f64, pow, pow, pow, .1, 10, -300, 300, true);
 	TEST1(double, simd_f64, exp, exp, exp, -600.0, 600.0, true);
 	TEST1(double, simd_f64, exp2, exp2, exp2, -1000.0, 1000.0, true);
 	TEST1(double, simd_f64, expm1, expm1, expm1, -2.0, 2.0, true);
@@ -937,11 +883,12 @@ int main() {
 	TEST1(double, simd_f64, log1p, log1p, log1p, exp(-3), exp(3), true);
 	TEST1(double, simd_f64, erf, erf, erf, -9, 9, true);
 	TEST1(double, simd_f64, erfc, erfc, erfc, -25.0, 25.0, true);
-
+	TEST1(double, simd_f64, cosh, cosh, cosh, -10.0, 10.0, true);
+	TEST1(double, simd_f64, sinh, sinh, sinh, -10.0, 10.0, true);
+	TEST1(double, simd_f64, tanh, tanh, tanh, -10.0, 10.0, true);
 	TEST1(double, simd_f64, sin, sin, sin, -2.0 * M_PI, 2.0 * M_PI, true);
 	TEST1(double, simd_f64, cos, cos, cos, -2.0 * M_PI, 2.0 * M_PI, true);
 	TEST1(double, simd_f64, tan, tan, tan, -2.0 * M_PI, 2.0 * M_PI, true);
-
 	TEST1(double, simd_f64, asin, asin, asin, -1, 1, true);
 	TEST1(double, simd_f64, acos, acos, acos, -1 + 1e-6, 1 - 1e-6, true);
 	TEST1(double, simd_f64, atan, atan, atan, -10.0, 10.0, true);
