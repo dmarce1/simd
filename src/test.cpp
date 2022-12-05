@@ -535,95 +535,95 @@ simd_f64 pow_precise(simd_f64 x, simd_f64 z) {
 	return (exp2(YLOG2X.x) * (simd_f64(1) + simd_f64(log2) * YLOG2X.y));
 }
 /*
-simd_f64 pow(simd_f64 x1, simd_f64 y) {
-	static std::once_flag once;
-	static constexpr int Nbits = 14;
-	static constexpr int N = 1 << Nbits;
-	static double loghitable[N];
-	static double loglotable[N];
-	static double expm1table[N];
-	static double LN2hi = log(hiprec_real(2));
-	static double LN2lo = log(hiprec_real(2)) - hiprec_real(LN2hi);
-	static simd_f64 ln2x;
-	static simd_f64 ln2y;
-	static simd_f64 ax;
-	static simd_f64 ay;
-	static bool init = false;
-	if (!init) {
-		for (int n = 0; n < N; n++) {
-			std::uint64_t ai = ((std::uint64_t) n << (52 - Nbits)) | ((std::uint64_t)(1023) << 52);
-			double x = (double&) ai;
-			ai = ((std::uint64_t) n << (52 - 2 * Nbits)) | ((std::uint64_t)(1023) << 52);
-			double y = (double&) ai;
-			y -= 1.0;
-			hiprec_real log_exact = log(hiprec_real(x));
-			hiprec_real exp_exact = exp(hiprec_real(y)) - hiprec_real(1);
-			loghitable[n] = log_exact;
-			expm1table[n] = exp_exact;
-			loglotable[n] = log_exact - hiprec_real(loghitable[n]);
-			hiprec_real exact = log2(exp(hiprec_real(1)));
-			ax = simd_f64(exact);
-			ay = simd_f64(exact - hiprec_real((double) exact));
-		}
-		ln2x = LN2hi;
-		ln2y = LN2lo;
-		init = true;
-	}
-	simd_f64 x = x1;
-	simd_f64 result, invy, ifloat, x0, dx, y1, y2, one, logx, logy, yt1, zx, zy, argx, argy, yt2, yp1, e0, ddx, ddy, y0, dy, tmp, e1x, e1y, e2x, e2y;
-	simd_i64 I, index, n, m;
-	simd_f64_2 X0, X, Y, Z, LN2, DX, DY, Y0, Y1, Y2, E0, E1, D, TMP, LOGX, YLOGX;
-	LN2.x = ln2x;
-	LN2.y = ln2y;
-	simd_f64 ONE(1.0);
-	simd_f64 NONE(-1.0);
-	simd_f64 HALF(0.5);
-	invy = y < simd_f64(0);
-	y = abs(y);
-	simd_f64 xo = x;
-	x = frexp(x, &I);
-	x *= simd_f64(2);
-	I = I - simd_f64(1);
-	n = (simd_i64&) x;
-	n >>= 52 - Nbits;
-	n <<= 52 - Nbits;
-	X = x;
-	X0.x = (simd_f64&) n;
-	DX.x = (X.x - X0.x) / X0.x;
-	DX.y = 0.0;
-	index = (n & simd_f64(0xFFFFFFFFFFFFFULL)) >> (52 - Nbits);
-	Y1.x = DX.x;
-	Y1.y = 0.0;
-	yp1 = Y1.x + simd_f64(1);
-	n = ((simd_i64&) yp1) & simd_i64(0xFFFFFFFFFFFFFULL);
-	m = simd_i64(0xFFFFFFFFFFFFFULL);
-	m >>= 52 - Nbits;
-	m <<= 52 - Nbits;
-	n = n & ~m;
-	n >>= 52 - 2 * Nbits;
-	e0.gather(expm1table, n);
-	n <<= 52 - 2 * Nbits;
-	n |= simd_i64(1023ULL) << 52;
-	Y0 = (simd_f64&) n;
-	Y0.x = Y0.x - ONE;
-	Y0.y = 0.0;
-	DY = Y1 - Y0;
-	E0 = e0;
-	DY.x = DY.x * (DY.x * HALF + ONE);
-	D.x = (E0.x + ONE) * (DY.x + ONE);
-	DY.y = D.y = 0.0;
-	Y1.x = Y1.x + (DX.x - E0.x - DY.x - E0.x * DY.x) / D.x;
-	Y1.y = 0.0;
-	yt1.gather(loghitable, index);
-	yt2.gather(loglotable, index);
-	Y2 = simd_f64_2::quick_two_sum(yt1, yt2);
-	LOGX = Y1 + Y2;
-	LOGX = LOGX + LN2 * simd_f64(I);
-	YLOGX = LOGX * simd_f64(y);
-	result = exp(YLOGX.x) * (simd_f64(1) + YLOGX.y);
-	result = blend(result, simd_f64(1) / result, invy);
-	return result;
-}*/
+ simd_f64 pow(simd_f64 x1, simd_f64 y) {
+ static std::once_flag once;
+ static constexpr int Nbits = 14;
+ static constexpr int N = 1 << Nbits;
+ static double loghitable[N];
+ static double loglotable[N];
+ static double expm1table[N];
+ static double LN2hi = log(hiprec_real(2));
+ static double LN2lo = log(hiprec_real(2)) - hiprec_real(LN2hi);
+ static simd_f64 ln2x;
+ static simd_f64 ln2y;
+ static simd_f64 ax;
+ static simd_f64 ay;
+ static bool init = false;
+ if (!init) {
+ for (int n = 0; n < N; n++) {
+ std::uint64_t ai = ((std::uint64_t) n << (52 - Nbits)) | ((std::uint64_t)(1023) << 52);
+ double x = (double&) ai;
+ ai = ((std::uint64_t) n << (52 - 2 * Nbits)) | ((std::uint64_t)(1023) << 52);
+ double y = (double&) ai;
+ y -= 1.0;
+ hiprec_real log_exact = log(hiprec_real(x));
+ hiprec_real exp_exact = exp(hiprec_real(y)) - hiprec_real(1);
+ loghitable[n] = log_exact;
+ expm1table[n] = exp_exact;
+ loglotable[n] = log_exact - hiprec_real(loghitable[n]);
+ hiprec_real exact = log2(exp(hiprec_real(1)));
+ ax = simd_f64(exact);
+ ay = simd_f64(exact - hiprec_real((double) exact));
+ }
+ ln2x = LN2hi;
+ ln2y = LN2lo;
+ init = true;
+ }
+ simd_f64 x = x1;
+ simd_f64 result, invy, ifloat, x0, dx, y1, y2, one, logx, logy, yt1, zx, zy, argx, argy, yt2, yp1, e0, ddx, ddy, y0, dy, tmp, e1x, e1y, e2x, e2y;
+ simd_i64 I, index, n, m;
+ simd_f64_2 X0, X, Y, Z, LN2, DX, DY, Y0, Y1, Y2, E0, E1, D, TMP, LOGX, YLOGX;
+ LN2.x = ln2x;
+ LN2.y = ln2y;
+ simd_f64 ONE(1.0);
+ simd_f64 NONE(-1.0);
+ simd_f64 HALF(0.5);
+ invy = y < simd_f64(0);
+ y = abs(y);
+ simd_f64 xo = x;
+ x = frexp(x, &I);
+ x *= simd_f64(2);
+ I = I - simd_f64(1);
+ n = (simd_i64&) x;
+ n >>= 52 - Nbits;
+ n <<= 52 - Nbits;
+ X = x;
+ X0.x = (simd_f64&) n;
+ DX.x = (X.x - X0.x) / X0.x;
+ DX.y = 0.0;
+ index = (n & simd_f64(0xFFFFFFFFFFFFFULL)) >> (52 - Nbits);
+ Y1.x = DX.x;
+ Y1.y = 0.0;
+ yp1 = Y1.x + simd_f64(1);
+ n = ((simd_i64&) yp1) & simd_i64(0xFFFFFFFFFFFFFULL);
+ m = simd_i64(0xFFFFFFFFFFFFFULL);
+ m >>= 52 - Nbits;
+ m <<= 52 - Nbits;
+ n = n & ~m;
+ n >>= 52 - 2 * Nbits;
+ e0.gather(expm1table, n);
+ n <<= 52 - 2 * Nbits;
+ n |= simd_i64(1023ULL) << 52;
+ Y0 = (simd_f64&) n;
+ Y0.x = Y0.x - ONE;
+ Y0.y = 0.0;
+ DY = Y1 - Y0;
+ E0 = e0;
+ DY.x = DY.x * (DY.x * HALF + ONE);
+ D.x = (E0.x + ONE) * (DY.x + ONE);
+ DY.y = D.y = 0.0;
+ Y1.x = Y1.x + (DX.x - E0.x - DY.x - E0.x * DY.x) / D.x;
+ Y1.y = 0.0;
+ yt1.gather(loghitable, index);
+ yt2.gather(loglotable, index);
+ Y2 = simd_f64_2::quick_two_sum(yt1, yt2);
+ LOGX = Y1 + Y2;
+ LOGX = LOGX + LN2 * simd_f64(I);
+ YLOGX = LOGX * simd_f64(y);
+ result = exp(YLOGX.x) * (simd_f64(1) + YLOGX.y);
+ result = blend(result, simd_f64(1) / result, invy);
+ return result;
+ }*/
 }
 
 double_2 exact_log(double x) {
@@ -843,29 +843,29 @@ int main() {
 	 printf("\nSingle Precision\n");
 	 printf("name   speed        avg err      max err\n");*/
 
-	 TEST2(float, simd_f32, pow, pow, pow, .1, 10, -30, 30, true);
-	 TEST1(float, simd_f32, exp, expf, exp, -86.0, 86.0, true);
-	 TEST1(float, simd_f32, exp2, exp2f, exp2, -125.0, 125.0, true);
-	 TEST1(float, simd_f32, expm1, expm1f, expm1, -2.0, 2.0, true);
-	 TEST1(float, simd_f32, log, logf, log, exp(-1), exp(40), true);
-	 TEST1(float, simd_f32, log2, log2f, log2, 0.00001, 100000, true);
-	 TEST1(float, simd_f32, log1p, log1pf, log1p, exp(-3), exp(3), true);
-	 TEST1(float, simd_f32, erf, erff, erf, -7, 7, true);
-	 TEST1(float, simd_f32, erfc, erfcf, erfc, -8.9, 8.9, true);
-	 TEST1(float, simd_f32, cosh, coshf, cosh, -10.0, 10.0, true);
-	 TEST1(float, simd_f32, sinh, sinhf, sinh, -10.0, 10.0, true);
-	 TEST1(float, simd_f32, tanh, tanhf, tanh, -10.0, 10.0, true);
-	 TEST1(float, simd_f32, sin, sinf, sin, -2 * M_PI, 2 * M_PI, true);
-	 TEST1(float, simd_f32, cos, cosf, cos, -2 * M_PI, 2 * M_PI, true);
-	 TEST1(float, simd_f32, tan, tanf, tan, -2 * M_PI, 2 * M_PI, true);
-	 TEST1(float, simd_f32, asin, asinf, asin, -1, 1, true);
-	 TEST1(float, simd_f32, acos, acosf, acos, -1, 1, true);
-	 TEST1(float, simd_f32, atan, atanf, atan, -10.0, 10.0, true);
+	TEST1(float, simd_f32, acosh, acoshf, acosh, 1.001, 10.0, true);
+	TEST1(float, simd_f32, asinh, asinhf, asinh, .001, 10, true);
+	TEST1(float, simd_f32, atanh, atanhf, atanh, 0.001, 0.999, true);
+	TEST2(float, simd_f32, pow, pow, pow, .1, 10, -30, 30, true);
+	TEST1(float, simd_f32, exp, expf, exp, -86.0, 86.0, true);
+	TEST1(float, simd_f32, exp2, exp2f, exp2, -125.0, 125.0, true);
+	TEST1(float, simd_f32, expm1, expm1f, expm1, -2.0, 2.0, true);
+	TEST1(float, simd_f32, log, logf, log, exp(-1), exp(40), true);
+	TEST1(float, simd_f32, log2, log2f, log2, 0.00001, 100000, true);
+	TEST1(float, simd_f32, log1p, log1pf, log1p, exp(-3), exp(3), true);
+	TEST1(float, simd_f32, erf, erff, erf, -7, 7, true);
+	TEST1(float, simd_f32, erfc, erfcf, erfc, -8.9, 8.9, true);
+	TEST1(float, simd_f32, cosh, coshf, cosh, -10.0, 10.0, true);
+	TEST1(float, simd_f32, sinh, sinhf, sinh, -10.0, 10.0, true);
+	TEST1(float, simd_f32, tanh, tanhf, tanh, -10.0, 10.0, true);
+	TEST1(float, simd_f32, sin, sinf, sin, -2 * M_PI, 2 * M_PI, true);
+	TEST1(float, simd_f32, cos, cosf, cos, -2 * M_PI, 2 * M_PI, true);
+	TEST1(float, simd_f32, tan, tanf, tan, -2 * M_PI, 2 * M_PI, true);
+	TEST1(float, simd_f32, asin, asinf, asin, -1, 1, true);
+	TEST1(float, simd_f32, acos, acosf, acos, -1, 1, true);
+	TEST1(float, simd_f32, atan, atanf, atan, -10.0, 10.0, true);
 
 	/*
-	 TEST1(float, simd_f32, acosh, acoshf, acosh, 1.001, 10.0, true);
-	 TEST1(float, simd_f32, asinh, asinhf, asinh, .001, 10, true);
-	 TEST1(float, simd_f32, atanh, atanhf, atanh, 0.001, 0.999, true);
 
 	 TEST1(float, simd_f32, cbrt, cbrtf, cbrt, 1.0 / 4000, 4000, true);
 	 TEST1(float, simd_f32, sqrt, sqrtf, sqrt, 0, std::numeric_limits<int>::max(), true);
@@ -874,6 +874,9 @@ int main() {
 	printf("\nDouble Precision\n");
 	printf("name   speed        avg err      max err\n");
 
+	TEST1(double, simd_f64, acosh, acosh, acosh, 1.001, 10.0, true);
+	TEST1(double, simd_f64, asinh, asinh, asinh, .001, 10, true);
+	TEST1(double, simd_f64, atanh, atanh, atanh, 0.001, 0.999, true);
 	TEST2(double, simd_f64, pow, pow, pow, .1, 10, -300, 300, true);
 	TEST1(double, simd_f64, exp, exp, exp, -600.0, 600.0, true);
 	TEST1(double, simd_f64, exp2, exp2, exp2, -1000.0, 1000.0, true);
@@ -894,9 +897,6 @@ int main() {
 	TEST1(double, simd_f64, atan, atan, atan, -10.0, 10.0, true);
 
 	/*	TEST1(double, simd_f64, exp2, exp2, exp2, -1000.0, 1000.0, true);
-	 TEST1(double, simd_f64, acosh, acosh, acosh, 1.001, 10.0, true);
-	 TEST1(double, simd_f64, asinh, asinh, asinh, .001, 10, true);
-	 TEST1(double, simd_f64, atanh, atanh, atanh, 0.001, 0.999, true);
 	 TEST1(double, simd_f64, cbrt, cbrt, cbrt, 1.0 / 4000, 4000, true);
 	 TEST1(double, simd_f64, sqrt, sqrt, sqrt, 0, std::numeric_limits<long long>::max(), true);
 	 TEST1(double, simd_f64, cvt, cvt64_ref, cvt64_test, 1LL, +1000000000LL, true);*/

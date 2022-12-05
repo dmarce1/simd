@@ -506,12 +506,6 @@ inline simd_f32 asinh(simd_f32 x) {
 
 }
 
-inline simd_f32 acosh(simd_f32 x) {
-	const auto z = x - simd_f32(1);
-	return log(x + sqrt(z * (z + simd_f32(2))));
-
-}
-
 inline simd_f32 max(simd_f32 a, simd_f32 b) {
 	a.v = _mm256_max_ps(a.v, b.v);
 	return a;
@@ -1085,11 +1079,6 @@ inline simd_f64 asinh(simd_f64 x) {
 
 }
 
-inline simd_f64 acosh(simd_f64 x) {
-	const auto z = x - simd_f64(1);
-	return log(x + sqrt(z * (z + simd_f64(2))));
-}
-
 inline simd_f64 atanh(simd_f64 x) {
 	const auto y = simd_f64(0.5) * log((simd_f64(1) + x) / (simd_f64(1) - x));
 	const auto expm1p = expm1(y);
@@ -1331,9 +1320,19 @@ inline simd_f32_2 operator-(simd_f32 a, simd_f32_2 b) {
 	return -b + a;
 }
 
+inline simd_f32_2 sqr(simd_f32_2 A) {
+	simd_f32_2 p;
+	p = simd_f32_2::two_product(A.x, A.x);
+	p.y += simd_f32(2) * A.x * A.y;
+	p = simd_f32_2::quick_two_sum(p.x, p.y);
+	return p;
+}
 
-
-
+inline simd_f32_2 sqrt(simd_f32_2 X) {
+	simd_f32_2 Y = sqrt(X.x);
+	Y = Y + (X / Y - Y) * simd_f32(0.5);
+	return Y;
+}
 
 struct simd_f64_2 {
 	simd_f64 x;
@@ -1387,7 +1386,8 @@ public:
 	inline operator simd_f64() const {
 		return x + y;
 	}
-	inline simd_f64_2 operator+(simd_f64 other) const {
+	inline simd_f64_2 operator+(
+			simd_f64 other) const {
 		simd_f64_2 s;
 		s = two_sum(x, other);
 		s.y += y;
@@ -1453,7 +1453,44 @@ inline simd_f64_2 operator-(simd_f64 a, simd_f64_2 b) {
 	return -b + a;
 }
 
+inline simd_f64_2 sqr(simd_f64_2 A) {
+	simd_f64_2 p;
+	p = simd_f64_2::two_product(A.x, A.x);
+	p.y += simd_f64(2) * A.x * A.y;
+	p = simd_f64_2::quick_two_sum(p.x, p.y);
+	return p;
+}
 
+inline simd_f64_2 sqrt(simd_f64_2 X) {
+	simd_f64_2 Y = sqrt(X.x);
+	Y = Y + (X / Y - Y) * simd_f64(0.5);
+	return Y;
+}
+
+
+inline simd_f32 acosh(simd_f32 x) {
+	const auto Z = sqrt(simd_f32_2::two_product(x, x) - simd_f32(1));
+	const auto P = simd_f32_2::two_sum(x, simd_f32(-1));
+	simd_f32_2 Q, W;
+	Q = simd_f32_2::two_sum(Z.x, P.x);
+	W = simd_f32_2::two_sum(Z.y, P.y);
+	Q.y += W.x;
+	Q = simd_f32_2::quick_two_sum(Q.x, Q.y);
+	Q.y += W.y;
+	return log1p(Q.x + Q.y);
+}
+
+inline simd_f64 acosh(simd_f64 x) {
+	const auto Z = sqrt(simd_f64_2::two_product(x, x) - simd_f64(1));
+	const auto P = simd_f64_2::two_sum(x, simd_f64(-1));
+	simd_f64_2 Q, W;
+	Q = simd_f64_2::two_sum(Z.x, P.x);
+	W = simd_f64_2::two_sum(Z.y, P.y);
+	Q.y += W.x;
+	Q = simd_f64_2::quick_two_sum(Q.x, Q.y);
+	Q.y += W.y;
+	return log1p(Q.x + Q.y);
+}
 
 
 }
