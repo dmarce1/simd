@@ -15,17 +15,17 @@ class hiprec_real {
 	mpfr_t q;
 public:
 	hiprec_real() {
-		mpfr_init2(q, 512);
+		mpfr_init2(q, 1024);
 	}
 	~hiprec_real() {
 		mpfr_clear(q);
 	}
 	hiprec_real(const hiprec_real& other) {
-		mpfr_init2(q, 512);
+		mpfr_init2(q, 1024);
 		*this = other;
 	}
 	hiprec_real(hiprec_real&& other) {
-		mpfr_init2(q, 512);
+		mpfr_init2(q, 1024);
 		*this = std::move(other);
 	}
 	hiprec_real& operator=(const hiprec_real& other) {
@@ -37,15 +37,15 @@ public:
 		return *this;
 	}
 	hiprec_real(long double a) {
-		mpfr_init2(q, 512);
+		mpfr_init2(q, 1024);
 		mpfr_set_ld(q, a, MPFR_RNDN);
 	}
 	hiprec_real(double a) {
-		mpfr_init2(q, 512);
+		mpfr_init2(q, 1024);
 		mpfr_set_d(q, a, MPFR_RNDN);
 	}
 	hiprec_real(int a) {
-		mpfr_init2(q, 512);
+		mpfr_init2(q, 1024);
 		mpfr_set_si(q, a, MPFR_RNDN);
 	}
 	operator double() const {
@@ -325,6 +325,98 @@ public:
 		return double_2(yn) + prod;
 	}
 	inline double_2 operator-(double_2 other) const {
+		return *this + -other;
+	}
+
+};
+
+
+struct float_2 {
+	float x;
+	float y;
+	static inline float_2 quick_two_sum(float a_, float b_) {
+		float_2 r;
+		volatile float a = a_;
+		volatile float b = b_;
+		volatile float s = a + b;
+		volatile float tmp = s - a;
+		volatile float e = b - tmp;
+		r.x = s;
+		r.y = e;
+		return r;
+	}
+	static inline float_2 two_sum(float a_, float b_) {
+		float_2 r;
+		volatile float a = a_;
+		volatile float b = b_;
+		volatile float s = a + b;
+		volatile float v = s - a;
+		volatile float tmp1 = s - v;
+		volatile float tmp2 = a - tmp1;
+		volatile float tmp3 = b - v;
+		volatile float e = tmp2 + tmp3;
+		r.x = s;
+		r.y = e;
+		return r;
+	}
+	static inline float_2 two_product(float a_, float b_) {
+		float_2 r;
+		const static float zero = 0.0;
+		volatile float a = a_;
+		volatile float b = b_;
+		volatile float xx = a * b;
+		volatile float yy = std::fma(a, b, -xx);
+		r.x = xx;
+		r.y = yy;
+		return r;
+	}
+public:
+	inline float_2& operator=(float a) {
+		x = a;
+		y = 0.0;
+		return *this;
+	}
+	inline float_2(float a) {
+		*this = a;
+	}
+	inline float_2() {
+	}
+	inline operator float() const {
+		return x + y;
+	}
+	inline float_2 operator+(float_2 other) const {
+		float_2 s, t;
+		s = two_sum(x, other.x);
+		t = two_sum(y, other.y);
+		s.y += t.x;
+		s = quick_two_sum(s.x, s.y);
+		s.y += t.y;
+		s = quick_two_sum(s.x, s.y);
+		return s;
+	}
+	inline float_2 operator*(float_2 other) const {
+		float_2 p;
+		p = two_product(x, other.x);
+		p.y += x * other.y;
+		p.y += y * other.x;
+		p = quick_two_sum(p.x, p.y);
+		return p;
+	}
+	inline float_2 operator-() const {
+		float_2 r;
+		r.x = -x;
+		r.y = -y;
+		return r;
+	}
+	inline float_2 operator/(const float_2 A) const {
+		float_2 result;
+		float xn = float(1) / A.x;
+		float yn = x * xn;
+		float_2 diff = (*this - A * float_2(yn));
+		float_2 prod = two_product(xn, diff);
+		return float_2(yn) + prod;
+	}
+	inline float_2 operator-(float_2 other) const {
 		return *this + -other;
 	}
 

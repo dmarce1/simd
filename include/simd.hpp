@@ -1492,6 +1492,13 @@ inline simd_f64 acosh(simd_f64 x) {
 	return log1p(Q.x + Q.y);
 }
 
+inline double reduce_sum(simd_f64 x) {
+	__m128d a = *((__m128d *) &x.v);
+	__m128d b = *(((__m128d *) &x.v) + 1);
+	a = _mm_add_pd(a, b);
+	return a[0] + a[1];
+}
+
 
 }
 

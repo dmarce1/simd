@@ -86,10 +86,10 @@ static void fft(std::valarray<std::complex<hiprec_real>>& x) {
 	const size_t N = x.size();
 	if (N <= 1)
 		return;
-	std::valarray<std::complex<hiprec_real>> even = x[std::slice(0, N / 2, 2)];
-	std::valarray<std::complex<hiprec_real>> odd = x[std::slice(1, N / 2, 2)];
-	fft(even);
-	fft(odd);
+	std::valarray < std::complex < hiprec_real >> even = x[std::slice(0, N / 2, 2)];
+	std::valarray < std::complex < hiprec_real >> odd = x[std::slice(1, N / 2, 2)];
+	fft (even);
+	fft (odd);
 	for (size_t k = 0; k < N / 2; ++k) {
 		static const auto one = hiprec_real(1);
 		static const auto twopi = hiprec_real(8) * atan(hiprec_real(1));
@@ -101,7 +101,7 @@ static void fft(std::valarray<std::complex<hiprec_real>>& x) {
 
 static void dct(std::valarray<hiprec_real>& x) {
 	const auto zero = hiprec_real(0);
-	std::valarray<std::complex<hiprec_real>> y;
+	std::valarray < std::complex < hiprec_real >> y;
 	y.resize(x.size() * 4);
 	for (int n = 0; n < 4 * x.size(); n++) {
 		std::complex<hiprec_real> z;
@@ -116,13 +116,13 @@ static void dct(std::valarray<hiprec_real>& x) {
 		}
 		y[n] = z;
 	}
-	fft(y);
+	fft (y);
 	for (int n = 0; n < x.size(); n++) {
 		x[n] = y[n].real() * (hiprec_real(2) - hiprec_real((int) (n == 0))) / hiprec_real(2 * (int) x.size());
 	}
 }
 
-static std::vector<double> ChebyCoeffs(std::function<hiprec_real(hiprec_real)> func, hiprec_real (toler), int evenodd = 0) {
+static std::vector<hiprec_real> ChebyCoeffs(std::function<hiprec_real(hiprec_real)> func, hiprec_real (toler), int evenodd = 0) {
 	static const hiprec_real one(1);
 	static const hiprec_real pi(hiprec_real(4) * atan(hiprec_real(1)));
 	hiprec_real last, next;
@@ -142,12 +142,12 @@ static std::vector<double> ChebyCoeffs(std::function<hiprec_real(hiprec_real)> f
 		eps = toler;
 		n = evenodd == -1 ? 1 : 0;
 		while (abs(X[n]) > eps && n < M - 1 - (evenodd == 1)) {
-		//	printf( "%i %e\n", n, (double)X[n]);
+			//	printf( "%i %e\n", n, (double)X[n]);
 			n += 1 + (evenodd != 0);
 			if (n > 0) {
 				eps /= hiprec_real(2);
 			}
-			if( evenodd != 0) {
+			if (evenodd != 0) {
 				eps /= hiprec_real(2);
 			}
 		}
@@ -160,10 +160,29 @@ static std::vector<double> ChebyCoeffs(std::function<hiprec_real(hiprec_real)> f
 	for (int n = 0; n < N; n++) {
 		c0 = poly_add(c0, poly_mul(poly_term(0, X[n]), tn[n]));
 	}
-	std::vector<double> coeff(N);
-	for (int n = 0; n < N; n++) {
-		coeff[n] = (double) c0[n];
+	return c0;
+}
+
+static std::vector<hiprec_real> ChebyCoeffs2(std::function<hiprec_real(hiprec_real)> func, int num, int evenodd = 0) {
+	static const hiprec_real one(1);
+	static const hiprec_real pi(hiprec_real(4) * atan(hiprec_real(1)));
+	hiprec_real last, next;
+	next = hiprec_real(99);
+	int M = 1 << (int(ceil(log2(num))) + 2);
+	int N;
+	std::valarray<hiprec_real> X;
+	X.resize(M);
+	last = next;
+	for (int m = 0; m < M; m++) {
+		X[m] = func(cos(pi * (hiprec_real(m) + hiprec_real(0.5)) / hiprec_real(M)));
 	}
-	return coeff;
+	dct(X);
+	N = num;
+	auto tn = Tns(N + 1);
+	polynomial c0(N + 1, hiprec_real(0));
+	for (int n = 0; n < N; n++) {
+		c0 = poly_add(c0, poly_mul(poly_term(0, X[n]), tn[n]));
+	}
+	return c0;
 }
 #endif /* POLYNOMIAL_HPP_ */
