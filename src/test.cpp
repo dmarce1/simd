@@ -51,6 +51,15 @@ struct test_result_t {
 	double speed;
 };
 
+double epserr(double x0, double y0) {
+	int i;
+	frexp(x0, &i);
+	i--;
+	double err = (x0 - y0) / ldexp(1.0, i);
+	return err;
+}
+
+
 template<class T, class V, class F1, class F2>
 test_result_t test_function(const F1& ref, const F2& test, T a, T b, bool relerr) {
 	constexpr int N = 1 << 23;
@@ -115,10 +124,7 @@ test_result_t test_function(const F1& ref, const F2& test, T a, T b, bool relerr
 		for (int j = 0; j < size; j++) {
 			T a = yref[i + j];
 			T b = ytest[i / size][j];
-			double this_err = fabs((double) a - (double) b);
-			if (relerr) {
-				this_err /= fabs((double) a + 1e-300);
-			}
+			double this_err = epserr(b,a);
 			err += this_err;
 			//printf( "%e %e %e\n", xref[i + j], a, b);
 			max_err = std::max((double) max_err, (double) this_err);
@@ -203,10 +209,7 @@ test_result_t test_function(const F1& ref, const F2& test, T a0, T b0, T a1, T b
 		for (int j = 0; j < size; j++) {
 			T a = zref[i + j];
 			T b = ztest[i / size][j];
-			double this_err = fabs((double) a - (double) b);
-			if (relerr) {
-				this_err /= fabs((double) a);
-			}
+			double this_err = epserr(b,a);
 			err += this_err;
 			max_err = std::max((double) max_err, (double) this_err);
 		}
@@ -666,9 +669,9 @@ double zeta(int s) {
 simd::simd_f64 tgamma(simd::simd_f64 x) {
 	using namespace simd;
 	static bool init = false;
-	static constexpr int M = 24;
+	static constexpr int M = 23;
 	static constexpr int N = 2 * M;
-	static constexpr int Nsin = 12;
+	static constexpr int Nsin = 11;
 	static double coeffs[Nsin];
 	static constexpr int Nsets = 13;
 	static hiprec_real coeff[M][Nsets];
@@ -789,6 +792,7 @@ simd::simd_f64 tgamma(simd::simd_f64 x) {
 	return y;
 }
 
+
 int main() {
 	using namespace simd;
 	double s, c;
@@ -801,7 +805,7 @@ int main() {
 		N++;
 		double a = tgammal(x);
 		double b = tgamma(simd_f64(x))[0];
-		double err = std::abs((a - b) / a);
+		double err = epserr(a, b);
 		maxe = std::max(maxe, err);
 		avge += err;
 		printf("%e %e %e %e\n", x, b, a, err / eps);
@@ -813,7 +817,7 @@ int main() {
 //	TEST1(double, simd_f64, exp, exp, exp, -600.0, 600.0, true);
 	TEST1(double, simd_f64, tgamma, tgamma, tgamma, -167, 167.000, true);
 	TEST1(float, simd_f32, tgamma, tgammaf, tgamma, 1.0, 33.0, true);
-	/*
+
 	 printf("Testing SIMD Functions\n");
 	 printf("\nSingle Precision\n");
 	 printf("name   speed        avg err      max err\n");
@@ -838,7 +842,7 @@ int main() {
 	 TEST1(float, simd_f32, tan, tanf, tan, -2 * M_PI, 2 * M_PI, true);
 	 TEST1(float, simd_f32, asin, asinf, asin, -1, 1, true);
 	 TEST1(float, simd_f32, acos, acosf, acos, -1, 1, true);
-	 TEST1(float, simd_f32, atan, atanf, atan, -10.0, 10.0, true);*/
+	 TEST1(float, simd_f32, atan, atanf, atan, -10.0, 10.0, true);
 
 	/*
 
@@ -849,7 +853,7 @@ int main() {
 	printf("\nDouble Precision\n");
 	printf("name   speed        avg err      max err\n");
 
-	/*TEST1(double, simd_f64, acosh, acosh, acosh, 1.001, 10.0, true);
+	TEST1(double, simd_f64, acosh, acosh, acosh, 1.001, 10.0, true);
 	 TEST1(double, simd_f64, asinh, asinh, asinh, .001, 10, true);
 	 TEST1(double, simd_f64, atanh, atanh, atanh, 0.001, 0.999, true);
 	 TEST2(double, simd_f64, pow, pow, pow, .1, 10, -300, 300, true);
@@ -869,7 +873,7 @@ int main() {
 	 TEST1(double, simd_f64, tan, tan, tan, -2.0 * M_PI, 2.0 * M_PI, true);
 	 TEST1(double, simd_f64, asin, asin, asin, -1, 1, true);
 	 TEST1(double, simd_f64, acos, acos, acos, -1 + 1e-6, 1 - 1e-6, true);
-	 TEST1(double, simd_f64, atan, atan, atan, -10.0, 10.0, true);*/
+	 TEST1(double, simd_f64, atan, atan, atan, -10.0, 10.0, true);
 
 	/*	TEST1(double, simd_f64, exp2, exp2, exp2, -1000.0, 1000.0, true);
 	 TEST1(double, simd_f64, cbrt, cbrt, cbrt, 1.0 / 4000, 4000, true);
