@@ -571,16 +571,6 @@ double binomial(int n, int k) {
 }
 ;
 
-double zeta(double s) {
-	double sum = 0.0;
-	double dsum;
-	int n = 1;
-	do {
-		sum += pow(n, -s);
-	} while (dsum + sum != sum);
-	return sum;
-}
-
 float tgamma_test2(float x) {
 	static bool init = false;
 	static constexpr int N = 2;
@@ -654,13 +644,34 @@ float tgamma_test2(float x) {
 	return y;
 }
 
+double zeta(int s) {
+	double_2 sum = 0.0;
+	int nmax = pow((1ULL << 54), 1.0 / s);
+	for (int n = 1; n < nmax; n++) {
+		double k = 1;
+		double j = 1;
+		for (int m = 0; m < s; m++) {
+			k *= (double) n;
+			j *= (double) n + 1;
+		}
+		double b = ((double) (n - s)) / (double) k;
+		double a = (double) n / (double) j;
+		sum.y += a - b;
+		sum = double_2::quick_two_sum(sum.x, sum.y);
+	}
+	return sum.x / (s - 1.0);
+}
+
 double tgamma_test(double x) {
 	static bool init = false;
-	static constexpr int M = 12;
+	static constexpr int M = 23;
 	static constexpr int N = 2 * M;
-	static constexpr int Nsin = 21;
-	static double coeff[M];
+	static constexpr int Nsin = 10;
 	static double coeffs[Nsin];
+	static constexpr int Nsets = 13;
+	static double coeff[Nsets][M];
+	int xa = 7.5;
+	double xb = 2.5;
 	if (!init) {
 		init = true;
 		hiprec_real A[N];
@@ -675,45 +686,112 @@ double tgamma_test(double x) {
 			A[n] = sum;
 		}
 		for (int n = 0; n < M; n++) {
-			coeff[n] = (A[2 * n] * sqrt(hiprec_real(2)) * gamma(hiprec_real(n) + hiprec_real(0.5)) / gamma(hiprec_real(0.5)));
+			coeff[12][n] = (A[2 * n] * sqrt(hiprec_real(2)) * gamma(hiprec_real(n) + hiprec_real(0.5)) / gamma(hiprec_real(0.5)));
 		}
 		for (int n = 0; n < Nsin; n++) {
 			const hiprec_real pi = hiprec_real(4) * atan(hiprec_real(1));
 			coeffs[n] = pow(hiprec_real(pi), hiprec_real(2 * n + 1)) * pow(hiprec_real(-1), hiprec_real(n)) / factorial(2 * n + 1) / pi;
 		}
+		for (int n = 0; n < 6; n++) {
+			hiprec_real a = hiprec_real(5) / hiprec_real(4) * (hiprec_real(n + 2));
+			hiprec_real b = hiprec_real(5) / hiprec_real(4) * (hiprec_real(n + 3));
+			std::function<hiprec_real(hiprec_real)> func = [a,b](hiprec_real x) {
+				const auto sum = a + b;
+				const auto dif = b - a;
+				const auto half = hiprec_real(0.5);
+				x = half*(sum + dif * x);
+				return gamma(x)*exp(x)*pow(x,-x)*sqrt(x / hiprec_real(8) / atan(hiprec_real(1)));
+			};
+			auto chebies = ChebyCoeffs(func, std::numeric_limits<double>::epsilon() * 0.005, 0);
+			chebies.resize(M, 0.0);
+			for (int m = 0; m < M; m++) {
+				coeff[4 + n][m] = chebies[m];
+			}
+		}
+		coeff[0][0] = 0.0;
+		coeff[1][0] = logl(tgammal(1.5));
+		coeff[2][0] = 0.0;
+		coeff[3][0] = logl(tgammal(2.5));
+		coeff[0][1] = -.57721566490153286060651209008240243104215933593992L;
+		coeff[2][1] = -.57721566490153286060651209008240243104215933593992 + 1.0L;
+		double_2 sum = -.57721566490153286060651209008240243104215933593992L - 2.0L / 3.0L;
+		coeff[1][1] = 0.0364899739785765205590237;
+		coeff[3][1] = 0.7031566406452431872256903336679110677;
+		for (int n = 2; n < M; n++) {
+			double z = zeta(n);
+			coeff[0][n] = pow(-1.0, n) * z / n;
+			coeff[1][n] = pow(-1.0, n) * z / n * ((1 << n) - 1);
+			coeff[1][n] += pow(-1.0, n - 1) * pow(0.5, -n) / n;
+			coeff[2][n] = coeff[0][n] - pow(-1.0, n) / n;
+			coeff[3][n] = coeff[1][n] + pow(-1.0, n - 1) * pow(1.5, -n) / n;
+		}
 	}
 	bool neg = false;
-	int xa = 10;
 	double y = 0.0;
 	double z, x0, x2;
 	if (x < 0.0) {
 		neg = true;
-		x0 = abs(x);
+		if (x < -1.0) {
+			x0 = abs(x);
+		} else {
+			x0 = x + 1.0;
+		}
 	} else {
 		x0 = x;
 	}
-	z = 1.0 / x0;
-	for (int k = M - 1; k >= 0; k--) {
-		y = fma(y, z, coeff[k]);
+	bool inv = x0 < 1.0;
+	if (inv) {
+		x0 += 1.0;
 	}
-	y *= expl(-x0) * powl(x0, x0) * sqrtl(2.0l * M_PIl * z);
+	int n;
+	if (x0 > xa) {
+		z = 1.0 / x0;
+		n = 12;
+	} else if (x0 > xb) {
+		n = floor(x0 / 1.25) + 2;
+		double xc = 1.25 * (n - 1.5);
+		z = 2.0 * (x0 - xc) / 1.25;
+	} else if (x0 >= 1.0) {
+		double x1 = round(2.0 * x0) * 0.5;
+		z = x0 - x1;
+		n = round(2 * x1 - 2);
+	}
+	for (int k = M - 1; k >= 0; k--) {
+		y = fma(y, z, coeff[n][k]);
+	}
+	if (n >= 4) {
+		double a = exp(-x0);
+		double b = pow(x0, 0.5 * x0);
+		a *= b;
+		a *= b;
+		y *= a * sqrt(2.0 * M_PIl / x0);
+	} else {
+		y = exp(y);
+	}
+	if (inv) {
+		y = y / (abs(x));
+	}
 	if (neg) {
-		x0 = x - floor(x);
-		int n = round(floor(x*2.0)*0.5);
-		double sgn = -1.0;
-		if( abs(n % 2) == 1 ) {
-			sgn = -sgn;
+		if (inv) {
+			y /= -(x + 1.0);
+		} else {
+			x0 = x - floor(x);
+			int n = round(floor(x * 2.0) * 0.5);
+			double sgn = -1.0;
+			if (abs(n % 2) == 1) {
+				sgn = -sgn;
+			}
+			if (x0 > 0.5) {
+				x0 = 1.0 - (x - floor(x));
+			}
+			z = 0.0;
+			x2 = x0 * x0;
+			for (int k = Nsin - 1; k >= 0; k--) {
+				z = fma(z, x2, coeffs[k]);
+			}
+			z *= x0 * sgn;
+			y = 1.0 / (y * x * z);
 		}
-		if( x0 > 0.5 ) {
-			x0 = 1.0 - (x - floor(x));
-		}
-		z = 0.0;
-		x2 = x0 * x0;
-		for (int k = Nsin - 1; k >= 0; k--) {
-			z = fma(z, x2, coeffs[k]);
-		}
-		z *= x0 * sgn;
-		y = 1.0 / (y * x * z);
 	}
 	return y;
 }
@@ -725,9 +803,9 @@ int main() {
 	double avge = 0.0;
 	int N = 0;
 	double eps = std::numeric_limits<double>::epsilon();
-	for (double x = -89.9999999; x < -10.0; x += 0.1 * rand1()) {
+	for (double x = 0.000001; x < 170.00; x *= 1.0 + 0.001 * rand1()) {
 		N++;
-		double a = tgamma(x);
+		double a = tgammal(x);
 		double b = tgamma_test(x);
 		double err = std::abs((a - b) / a);
 		maxe = std::max(maxe, err);
