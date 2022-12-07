@@ -242,6 +242,11 @@ hiprec_real exp2(hiprec_real a) {
 struct double_2 {
 	double x;
 	double y;
+	double_2& operator=(long double z) {
+		x = z;
+		y = z - (long double) x;
+		return *this;
+	}
 	static inline double_2 quick_two_sum(double a_, double b_) {
 		double_2 r;
 		volatile double a = a_;
