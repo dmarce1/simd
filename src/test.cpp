@@ -571,7 +571,17 @@ double binomial(int n, int k) {
 }
 ;
 
-float tgamma_test(float x) {
+double zeta(double s) {
+	double sum = 0.0;
+	double dsum;
+	int n = 1;
+	do {
+		sum += pow(n, -s);
+	} while (dsum + sum != sum);
+	return sum;
+}
+
+float tgamma_test2(float x) {
 	static bool init = false;
 	static constexpr int N = 2;
 	static constexpr int M = 18;
@@ -611,11 +621,11 @@ float tgamma_test(float x) {
 	}
 	float x0 = std::floor(x);
 	float x3 = x;
-	bool z2one = x0 == 0.0;
-	if (z2one) {
-		x0 += 1.0;
-		x += 1.0;
-	}
+//	bool z2one = x0 == 0.0;
+//	if (z2one) {
+//		x0 += 1.0;
+//		x += 1.0;
+//	}
 	float x1 = x - x0;
 	int nn = x0 - 1;
 	int n;
@@ -630,26 +640,80 @@ float tgamma_test(float x) {
 		y = fmaf(y, x1, co[n][m]);
 	}
 	y = expf(y);
-	float_2 X, Z;
-	X = float_2::quick_two_sum(-nn, x);
+	float xi = -nn;
 	while (nn > 0) {
-		y = y * X.x;
-		Z = float_2::quick_two_sum(1, X.x);
-		X.x = Z.x;
-		X.y += Z.y;
-		X = float_2::quick_two_sum(X.x, X.y);
+		y = y * (xi + x);
+		xi++;
 		nn--;
 	}
 	while (nn < 0) {
-		Z = float_2::quick_two_sum(-1, X.x);
-		X.x = Z.x;
-		X.y += Z.y;
-		X = float_2::quick_two_sum(X.x, X.y);
-		y = y / X.x;
+		xi--;
+		y = y / (xi + x);
 		nn++;
 	}
-	if (z2one) {
-		y /= x3;
+	return y;
+}
+
+double tgamma_test(double x) {
+	static bool init = false;
+	static constexpr int M = 12;
+	static constexpr int N = 2 * M;
+	static constexpr int Nsin = 21;
+	static double coeff[M];
+	static double coeffs[Nsin];
+	if (!init) {
+		init = true;
+		hiprec_real A[N];
+		A[0] = hiprec_real(0.5) * sqrt(hiprec_real(2));
+		for (int n = 1; n < N; n++) {
+			hiprec_real sum = 0.0;
+			for (int k = 1; k < n; k++) {
+				sum += A[k] * A[n - k] / hiprec_real(k + 1);
+			}
+			sum = 1.0 / n * A[n - 1] - sum;
+			sum /= A[0] * (hiprec_real(1) + hiprec_real(1) / (hiprec_real(n) + hiprec_real(1)));
+			A[n] = sum;
+		}
+		for (int n = 0; n < M; n++) {
+			coeff[n] = (A[2 * n] * sqrt(hiprec_real(2)) * gamma(hiprec_real(n) + hiprec_real(0.5)) / gamma(hiprec_real(0.5)));
+		}
+		for (int n = 0; n < Nsin; n++) {
+			const hiprec_real pi = hiprec_real(4) * atan(hiprec_real(1));
+			coeffs[n] = pow(hiprec_real(pi), hiprec_real(2 * n + 1)) * pow(hiprec_real(-1), hiprec_real(n)) / factorial(2 * n + 1) / pi;
+		}
+	}
+	bool neg = false;
+	int xa = 10;
+	double y = 0.0;
+	double z, x0, x2;
+	if (x < 0.0) {
+		neg = true;
+		x0 = abs(x);
+	} else {
+		x0 = x;
+	}
+	z = 1.0 / x0;
+	for (int k = M - 1; k >= 0; k--) {
+		y = fma(y, z, coeff[k]);
+	}
+	y *= expl(-x0) * powl(x0, x0) * sqrtl(2.0l * M_PIl * z);
+	if (neg) {
+		x0 = x - floor(x);
+		int n = round(floor(x*2.0)*0.5);
+		double sgn = -1.0;
+		if( abs(n % 2) == 1 ) {
+			sgn = -sgn;
+		}
+		if( x0 > 0.5 ) {
+			x0 = 1.0 - (x - floor(x));
+		}
+		z = 0.0;
+		x2 = x0 * x0;
+		for (int k = Nsin - 1; k >= 0; k--) {
+			z = fma(z, x2, coeffs[k]);
+		}
+		z *= x0 * sgn;
+		y = 1.0 / (y * x * z);
 	}
 	return y;
 }
@@ -660,22 +724,23 @@ int main() {
 	double maxe = 0.0;
 	double avge = 0.0;
 	int N = 0;
-	double eps = std::numeric_limits<float>::epsilon();
-	for (double x = -33+.000001; x < 33.0; x += 0.005 * rand1()) {
+	double eps = std::numeric_limits<double>::epsilon();
+	for (double x = -89.9999999; x < -10.0; x += 0.1 * rand1()) {
 		N++;
-		double a = tgammaf(x);
+		double a = tgamma(x);
 		double b = tgamma_test(x);
 		double err = std::abs((a - b) / a);
 		maxe = std::max(maxe, err);
 		avge += err;
-		printf("%e %e %e %e\n", x, b, a, err/eps);
+		printf("%e %e %e %e\n", x, b, a, err / eps);
 	}
 	avge /= N;
-	printf("%e %e \n", maxe/eps, avge/eps);
-//return 0;
+	printf("%e %e \n", maxe / eps, avge / eps);
+	return 0;
 //	TEST2(float, simd_f32, pow, powf, pow, 1e-3, 1e3, .01, 10, true);
 //TEST1(double, simd_f64, log2, log2, log2_precise, .0001, 100000, true);
 //	TEST1(double, simd_f64, exp, exp, exp, -600.0, 600.0, true);
+	return 0;
 	TEST1(double, simd_f64, tgamma, tgamma, tgamma, -0.999, 0.000, true);
 	TEST1(float, simd_f32, tgamma, tgammaf, tgamma, 1.0, 33.0, true);
 	/*

@@ -1020,6 +1020,7 @@ public:
 			v[i] = std::numeric_limits<double>::signaling_NaN();
 		}
 	}
+	friend simd_f64 tgamma(simd_f64);
 	friend simd_f64 sqrt(simd_f64);
 	friend simd_f64 rsqrt(simd_f64);
 	friend simd_f64 fma(simd_f64, simd_f64, simd_f64);
