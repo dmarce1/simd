@@ -662,14 +662,15 @@ double zeta(int s) {
 	return sum.x / (s - 1.0);
 }
 
-double tgamma_test(double x) {
+double tgamma_test(double x_) {
+	using namespace simd;
 	static bool init = false;
 	static constexpr int M = 23;
 	static constexpr int N = 2 * M;
 	static constexpr int Nsin = 10;
 	static double coeffs[Nsin];
 	static constexpr int Nsets = 13;
-	static double coeff[Nsets][M];
+	static double coeff[M][Nsets];
 	int xa = 7.5;
 	double xb = 2.5;
 	if (!init) {
@@ -686,7 +687,7 @@ double tgamma_test(double x) {
 			A[n] = sum;
 		}
 		for (int n = 0; n < M; n++) {
-			coeff[12][n] = (A[2 * n] * sqrt(hiprec_real(2)) * gamma(hiprec_real(n) + hiprec_real(0.5)) / gamma(hiprec_real(0.5)));
+			coeff[n][12] = (A[2 * n] * sqrt(hiprec_real(2)) * gamma(hiprec_real(n) + hiprec_real(0.5)) / gamma(hiprec_real(0.5)));
 		}
 		for (int n = 0; n < Nsin; n++) {
 			const hiprec_real pi = hiprec_real(4) * atan(hiprec_real(1));
@@ -705,73 +706,111 @@ double tgamma_test(double x) {
 			auto chebies = ChebyCoeffs(func, std::numeric_limits<double>::epsilon() * 0.005, 0);
 			chebies.resize(M, 0.0);
 			for (int m = 0; m < M; m++) {
-				coeff[4 + n][m] = chebies[m];
+				coeff[m][4 + n] = chebies[m];
 			}
 		}
 		coeff[0][0] = 0.0;
-		coeff[1][0] = logl(tgammal(1.5));
-		coeff[2][0] = 0.0;
-		coeff[3][0] = logl(tgammal(2.5));
-		coeff[0][1] = -.57721566490153286060651209008240243104215933593992L;
-		coeff[2][1] = -.57721566490153286060651209008240243104215933593992 + 1.0L;
+		coeff[0][1] = logl(tgammal(1.5));
+		coeff[0][2] = 0.0;
+		coeff[0][3] = logl(tgammal(2.5));
+		coeff[1][0] = -.57721566490153286060651209008240243104215933593992L;
+		coeff[1][2] = -.57721566490153286060651209008240243104215933593992 + 1.0L;
 		double_2 sum = -.57721566490153286060651209008240243104215933593992L - 2.0L / 3.0L;
 		coeff[1][1] = 0.0364899739785765205590237;
-		coeff[3][1] = 0.7031566406452431872256903336679110677;
+		coeff[1][3] = 0.7031566406452431872256903336679110677;
 		for (int n = 2; n < M; n++) {
 			double z = zeta(n);
-			coeff[0][n] = pow(-1.0, n) * z / n;
-			coeff[1][n] = pow(-1.0, n) * z / n * ((1 << n) - 1);
-			coeff[1][n] += pow(-1.0, n - 1) * pow(0.5, -n) / n;
-			coeff[2][n] = coeff[0][n] - pow(-1.0, n) / n;
-			coeff[3][n] = coeff[1][n] + pow(-1.0, n - 1) * pow(1.5, -n) / n;
+			coeff[n][0] = pow(-1.0, n) * z / n;
+			coeff[n][1] = pow(-1.0, n) * z / n * ((1 << n) - 1);
+			coeff[n][1] += pow(-1.0, n - 1) * pow(0.5, -n) / n;
+			coeff[n][2] = coeff[n][0] - pow(-1.0, n) / n;
+			coeff[n][3] = coeff[n][1] + pow(-1.0, n - 1) * pow(1.5, -n) / n;
 		}
 	}
-	bool neg = false;
-	double y = 0.0;
-	double z, x0, x2;
-	if (x < 0.0) {
-		neg = true;
-		if (x < -1.0) {
-			x0 = abs(x);
-		} else {
-			x0 = x + 1.0;
-		}
-	} else {
-		x0 = x;
-	}
-	bool inv = x0 < 1.0;
-	if (inv) {
-		x0 += 1.0;
-	}
-	int n;
-	if (x0 > xa) {
-		z = 1.0 / x0;
-		n = 12;
-	} else if (x0 > xb) {
-		n = floor(x0 / 1.25) + 2;
-		double xc = 1.25 * (n - 1.5);
-		z = 2.0 * (x0 - xc) / 1.25;
-	} else if (x0 >= 1.0) {
-		double x1 = round(2.0 * x0) * 0.5;
-		z = x0 - x1;
-		n = round(2 * x1 - 2);
-	}
+	simd_f64 x(x_);
+	simd_f64 y, z, x0, x1, nf, x2, c, xc, a, b, sgn;
+	simd_i64 neg, inv, ni, xoa, xob, flag;
+
+//	bool neg = false;
+//	double y = 0.0;
+//	double z, x0, x2;
+	/*	if (x < 0.0) {
+	 neg = true;
+	 if (x < -1.0) {
+	 x0 = abs(x);
+	 } else {
+	 x0 = x + 1.0;
+	 }
+	 } else {
+	 x0 = x;
+	 }*/
+	neg = x < simd_f64(0);
+	x0 = x + simd_f64(1);
+	x0 = blend(abs(x), x0, x >= simd_f64(-1));
+	x0 = blend(x, x0, neg);
+
+	/*	bool inv = x0 < 1.0;
+	 if (inv) {
+	 x0 += 1.0;
+	 }*/
+	inv = x0 < simd_f64(1);
+	x0 = blend(x0, x0 + simd_f64(1), inv);
+
+	/*	int n;
+	 if (x0 > xa) {
+	 z = 1.0 / x0;
+	 n = 12;
+	 } else if (x0 > xb) {
+	 n = floor(x0 / 1.25) + 2;
+	 double xc = 1.25 * (n - 1.5);
+	 z = 2.0 * (x0 - xc) / 1.25;
+	 } else if (x0 >= 1.0) {
+	 double x1 = round(2.0 * x0) * 0.5;
+	 z = x0 - x1;
+	 n = round(2 * x1 - 2);
+	 }*/
+
+	x1 = round(simd_f64(2) * x0) * simd_f64(0.5);
+	xoa = x0 > simd_f64(7.5);
+	xob = x0 > simd_f64(2.5);
+	nf = round(simd_f64(2) * x1 - simd_f64(2));
+	nf = blend(nf, floor(x0 * simd_f64(0.8)) + simd_i64(2), xob);
+	nf = blend(nf, simd_f64(12), xoa);
+	xc = simd_f64(1.25) * (simd_f64(nf) - simd_f64(1.5));
+	z = x0 - x1;
+	z = blend(z, simd_f64(1.6) * (x0 - xc), xob);
+	z = blend(z, simd_f64(1) / x0, xoa);
+	ni = simd_i64(round(nf));
+	/*for (int k = M - 1; k >= 0; k--) {
+	 y = fma(y, z, coeff[n][k]);
+	 }*/
+	y = simd_f64(0);
 	for (int k = M - 1; k >= 0; k--) {
-		y = fma(y, z, coeff[n][k]);
+		y = fma(y, z, c.gather(coeff[k], ni));
 	}
-	if (n >= 4) {
-		double a = exp(-x0);
-		double b = pow(x0, 0.5 * x0);
-		a *= b;
-		a *= b;
-		y *= a * sqrt(2.0 * M_PIl / x0);
-	} else {
-		y = exp(y);
-	}
-	if (inv) {
-		y = y / (abs(x));
-	}
-	if (neg) {
+
+	/*if (n >= 4) {
+	 double a = exp(-x0);
+	 double b = pow(x0, 0.5 * x0);
+	 a *= b;
+	 a *= b;
+	 y *= a * sqrt(2.0 * M_PIl / x0);
+	 } else {
+	 y = exp(y);
+	 }*/
+	flag = ni >= simd_i64(4);
+	a = exp(blend(y, -x0, flag));
+	b = pow(x0, simd_f64(0.5) * x0);
+	a = blend(a, a * b, flag);
+	a = blend(a, a * b, flag);
+	a = blend(a, a * sqrt(simd_f64(2.0 * M_PI) / x0), flag);
+	y = blend(a, a * y, flag);
+	/*	if (inv) {
+	 y = y / (abs(x));
+	 }*/
+	y = blend(y, y / abs(x), inv);
+
+	/*if (neg) {
 		if (inv) {
 			y /= -(x + 1.0);
 		} else {
@@ -792,8 +831,26 @@ double tgamma_test(double x) {
 			z *= x0 * sgn;
 			y = 1.0 / (y * x * z);
 		}
+	}*/
+	x2 = x - floor(x);
+	x0 = blend(x2, simd_f64(1) - (x - floor(x)), x2 > simd_f64(0.5));
+	sgn = simd_f64(1);
+	nf = abs(floor(abs(x) * simd_f64(2))*simd_f64(0.5));
+	ni = simd_i64(nf);
+	sgn = blend(sgn, -sgn, (ni & simd_i64(1)) != simd_i64(0));
+//	printf( "%f %e %e \n", nf[0], x0[0], sgn[0]);
+//	printf( "%e %i\n", sgn[0], ni[0]);
+	z = simd_f64(0);
+	x2 = x0 * x0;
+	for (int k = Nsin - 1; k >= 0; k--) {
+		z = fma(z, x2, simd_f64(coeffs[k]));
 	}
-	return y;
+	z *= x0 * sgn;
+	z = simd_f64(1) / (x * y * z);
+	z = blend(z, y / -(simd_f64(x) + simd_f64(1)), inv);
+	y = blend(y, z, neg);
+
+	return y[0];
 }
 
 int main() {
@@ -803,7 +860,7 @@ int main() {
 	double avge = 0.0;
 	int N = 0;
 	double eps = std::numeric_limits<double>::epsilon();
-	for (double x = 0.000001; x < 170.00; x *= 1.0 + 0.001 * rand1()) {
+	for (double x = -0.00001; x > -170.00; x *= 1.0 + 0.0001 * rand1()) {
 		N++;
 		double a = tgammal(x);
 		double b = tgamma_test(x);
