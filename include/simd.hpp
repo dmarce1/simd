@@ -1168,6 +1168,8 @@ inline simd_i64::simd_i64(const simd_f64& other) {
 	v[3] = (long long) (other[3]);
 }
 
+simd_f64 tgamma(simd_f64);
+
 inline simd_f64 sqrt(simd_f64 x) {
 	x.v = _mm256_sqrt_pd(x.v);
 	return x;
@@ -1385,8 +1387,7 @@ public:
 	inline operator simd_f64() const {
 		return x + y;
 	}
-	inline simd_f64_2 operator+(
-			simd_f64 other) const {
+	inline simd_f64_2 operator+(simd_f64 other) const {
 		simd_f64_2 s;
 		s = two_sum(x, other);
 		s.y += y;
@@ -1466,7 +1467,6 @@ inline simd_f64_2 sqrt(simd_f64_2 X) {
 	return Y;
 }
 
-
 inline simd_f32 acosh(simd_f32 x) {
 	const auto Z = sqrt(simd_f32_2::two_product(x, x) - simd_f32(1));
 	const auto P = simd_f32_2::two_sum(x, simd_f32(-1));
@@ -1497,7 +1497,6 @@ inline double reduce_sum(simd_f64 x) {
 	a = _mm_add_pd(a, b);
 	return a[0] + a[1];
 }
-
 
 }
 
