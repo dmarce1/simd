@@ -667,19 +667,21 @@ double lgamma_root(double x0) {
 
 double lgamma_test(double x) {
 	static bool init = false;
-	static constexpr int NROOTS = 30;
+	static constexpr int NROOTS = 28;
 	static constexpr int N1 = 9;
 	static constexpr int N2 = 24;
 	static constexpr int N = N1 + N2;
-	static constexpr int M1 = 21;
-	static constexpr int M = 21;
-	static constexpr int Msin = 11;
-	static constexpr int Mroot = 21;
+	static constexpr int M1 = 26;
+	static constexpr int M = 26;
+	static constexpr int Msin = 26;
+	static constexpr int Mroot = 26;
 	static double coeffs[M][N];
+	static double logsincoeffs[Msin];
 	static double sincoeffs[Msin];
 	static double rootlocs[NROOTS];
 	static double rootcoeffs[NROOTS][Mroot];
 	static double rootspans[NROOTS];
+	static double factor = 1e10;
 	static double Xc[N];
 	if (!init) {
 		init = true;
@@ -719,19 +721,39 @@ double lgamma_test(double x) {
 				sincoeffs[n] = pow(hiprec_real(pi), hiprec_real(2 * n + 1)) * pow(hiprec_real(-1), hiprec_real(n)) / factorial(2 * n + 1) / pi;
 			}
 		}
+		std::function<hiprec_real(hiprec_real)> func = [](hiprec_real x) {
+			const auto sum = 0;
+			const auto dif = 1;
+			const auto half = hiprec_real(0.5);
+			static const hiprec_real pi = hiprec_real(4) * atan(hiprec_real(1));
+			x = half*x;
+			if( x == hiprec_real(0.0)) {
+				return hiprec_real(0);
+			} else {
+				return log(sin(pi * x ) / (pi * x));
+			}
+		};
+		auto chebies = ChebyCoeffs(func, std::numeric_limits<double>::epsilon() * 0.5, 1);
+		chebies.resize(2 * Msin, 0.0);
+		for (int i = 0; i < 2 * Msin; i += 2) {
+			logsincoeffs[i / 2] = (double) chebies[i];
+		}
 		double x0 = -2.25;
 		int n = 0;
-		while (x0 > -17.0) {
+		while (x0 > -16.0) {
 			double xrt = lgamma_root(x0);
 			rootlocs[n] = xrt;
-			rootcoeffs[n][0] = lgamma((double)xrt);
+			rootcoeffs[n][0] = lgamma((double) xrt);
 			double mfac = 1.0;
 			for (int m = 1; m < Mroot; m++) {
 				mfac *= m;
-				rootcoeffs[n][m] = (double) polygamma(m - 1, xrt) / mfac;
+				rootcoeffs[n][m] = (double) (polygamma(m - 1, xrt) / hiprec_real(mfac) * pow(hiprec_real(factor), hiprec_real(-m)));
 			}
 			int m = Mroot - 1;
-			rootspans[n] = pow(0.5 * std::numeric_limits<double>::epsilon() / fabs(rootcoeffs[n][m]), 1.0 / (m));
+			auto a = pow(hiprec_real(4 * std::numeric_limits<double>::epsilon()), hiprec_real(1.0 / (m)));
+			auto b = pow(pow(hiprec_real(factor), hiprec_real(-m)) / hiprec_real(fabs(rootcoeffs[n][m])), hiprec_real(1.0 / (m)));
+			rootspans[n] = a;
+			rootspans[n] *= b;
 			x0 -= 0.5;
 			n++;
 		}
@@ -751,24 +773,28 @@ double lgamma_test(double x) {
 		ic = floor(x);
 		if (ic >= 2) {
 			ic -= 2;
-			xroot = rootlocs[2 * ic];
-			xspan = rootspans[2 * ic];
-			if (fabs(x0 - xroot) < xspan) {
-				nearroot = true;
-				ic = 2 * ic;
-			} else {
-				xroot = rootlocs[2 * ic + 1];
-				xspan = rootspans[2 * ic + 1];
+			if (ic < NROOTS / 2) {
+				xroot = rootlocs[2 * ic];
+				xspan = rootspans[2 * ic];
 				if (fabs(x0 - xroot) < xspan) {
 					nearroot = true;
-					ic = 2 * ic + 1;
+					ic = 2 * ic;
+				} else {
+					xroot = rootlocs[2 * ic + 1];
+					xspan = rootspans[2 * ic + 1];
+					if (fabs(x0 - xroot) < xspan) {
+						nearroot = true;
+						ic = 2 * ic + 1;
+					}
 				}
 			}
 		}
 		if (nearroot) {
 			y = 0.0;
 			x = x0 - xroot;
-			//	printf( "%e\n", x);
+			printf("root at %e\n", xroot);
+			//	printf("%e\n", x);
+			x *= factor;
 			for (int m = Mroot - 1; m >= 0; m--) {
 				y = fma(x, y, rootcoeffs[ic][m]);
 			}
@@ -796,24 +822,31 @@ double lgamma_test(double x) {
 	for (int m = M - 1; m >= 0; m--) {
 		y = fma(z, y, coeffs[m][ic]);
 	}
-	if (inv) {
-		y -= logx;
+	double_2 Y;
+	Y = y;
+	if (inv && !neg) {
+		Y = Y - double_2(logx);
 	}
 
 	if (neg) {
-		x = x0 - floor(x0);
-		if (x > 0.5) {
-			x = 1.0 - (x0 - floor(x0));
+		double r;
+		r = x0 - floor(x0);
+		if (r > 0.5) {
+			r = 1.0 - (x0 - floor(x0));
 		}
 		z = 0.0;
-		x2 = x * x;
+		x2 = 4.0 * r * r;
 		for (int m = Msin - 1; m >= 0; m--) {
-			z = fma(z, x2, sincoeffs[m]);
+			z = fma(z, x2, logsincoeffs[m]);
 		}
-		z *= x;
-		y += log(abs(z)) + logx;
-		y = -y;
+		Y = -Y;
+		if( !inv ) {
+			Y = Y - double_2(logx);
+		}
+		Y = Y - double_2(z);
+		Y = Y - double_2(log(abs(r)));
 	}
+	y = Y.x;
 	return y;
 }
 
@@ -835,7 +868,7 @@ int main() {
 	int Na = 100;
 	int i = 0;
 	double a, b, err;
-	for (double x = -6.0; x < 6.0; x += 0.001) {
+	for (double x = -200.0; x < 6.0; x += 0.01) {
 		N++;
 		a = lgammal(x);
 		b = lgamma_test(x);
