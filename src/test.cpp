@@ -51,6 +51,136 @@ struct test_result_t {
 	double speed;
 };
 
+#define List(...) {__VA_ARGS__}
+
+hiprec_real zetam1(int s) {
+	if (s < 100) {
+		constexpr static long double values[] =
+		List(0.6449340668482264364724L,0.2020569031595942853997L,0.082323233711138191516L,
+				0.03692775514336992633137L,0.01734306198444913971452L,0.008349277381922826839798L,
+				0.004077356197944339378685L,0.002008392826082214417853L,0.000994575127818085337146L,
+				0.0004941886041194645587023L,0.000246086553308048298638L,0.0001227133475784891467518L,
+				0.00006124813505870482925855L,0.00003058823630702049355173L,0.00001528225940865187173257L,
+				7.6371976378997622736e-6L,3.817293264999839856462e-6L,1.908212716553938925657e-6L,
+				9.53962033872796113152e-7L,4.769329867878064631167e-7L,2.384505027277329900036e-7L,
+				1.192199259653110730678e-7L,5.960818905125947961244e-8L,2.980350351465228018606e-8L,
+				1.490155482836504123466e-8L,7.450711789835429491981e-9L,3.725334024788457054819e-9L,
+				1.862659723513049006404e-9L,9.313274324196681828718e-10L,4.656629065033784072989e-10L,
+				2.328311833676505492001e-10L,1.164155017270051977593e-10L,5.820772087902700889244e-11L,
+				2.910385044497099686929e-11L,1.455192189104198423593e-11L,7.275959835057481014521e-12L,
+				3.637979547378651190237e-12L,1.818989650307065947585e-12L,9.094947840263889282533e-13L,
+				4.547473783042154026799e-13L,2.273736845824652515227e-13L,1.136868407680227849349e-13L,
+				5.684341987627585609277e-14L,2.842170976889301855455e-14L,1.421085482803160676983e-14L,
+				7.105427395210852712877e-15L,3.552713691337113673298e-15L,1.776356843579120327473e-15L,
+				8.881784210930815903096e-16L,4.440892103143813364198e-16L,2.220446050798041983999e-16L,
+				1.110223025141066133721e-16L,5.551115124845481243724e-17L,2.775557562136124172582e-17L,
+				1.387778780972523276284e-17L,6.938893904544153697446e-18L,3.469446952165922624744e-18L,
+				1.734723476047576572049e-18L,8.673617380119933728342e-19L,4.336808690020650487497e-19L,
+				2.168404344997219785014e-19L,1.084202172494241406301e-19L,5.421010862456645410919e-20L,
+				2.710505431223468831955e-20L,1.355252715610116458149e-20L,6.776263578045189097995e-21L,
+				3.388131789020796818086e-21L,1.694065894509799165406e-21L,8.470329472546998348247e-22L,
+				4.235164736272833347862e-22L,2.117582368136194731844e-22L,1.058791184068023385227e-22L,
+				5.293955920339870323814e-23L,2.646977960169852961134e-23L,1.323488980084899080309e-23L,
+				6.617444900424404067355e-24L,3.308722450212171588947e-24L,1.65436122510607564623e-24L,
+				8.271806125530344403671e-25L,4.135903062765160926009e-25L,2.067951531382576704396e-25L,
+				1.033975765691287099328e-25L,5.16987882845643132041e-26L,2.584939414228214268128e-26L,
+				1.292469707114106670038e-26L,6.462348535570531803438e-27L,3.231174267785265386135e-27L,
+				1.615587133892632521206e-27L,8.077935669463162033159e-28L,4.038967834731580825622e-28L,
+				2.019483917365790349159e-28L,1.009741958682895153362e-28L,5.048709793414475696085e-29L,
+				2.524354896707237824467e-29L,1.262177448353618904375e-29L,6.310887241768094495683e-30L,
+				3.15544362088404723911e-30L,1.577721810442023616644e-30L,7.888609052210118073521e-31L,
+				3.944304526105059033526e-31L,1.972152263052529515685e-31L,9.860761315262647574833e-32L,
+				4.930380657631323786219e-32L,2.46519032881566189271e-32L,1.232595164407830946222e-32L,
+				6.162975822039154730666e-33L,3.081487911019577365185e-33L,1.540743955509788682543e-33L,
+				7.703719777548943412553e-34L,3.851859888774471706221e-34L,1.925929944387235853092e-34L,
+				9.629649721936179265402e-35L,4.814824860968089632681e-35L,2.407412430484044816333e-35L,
+				1.203706215242022408164e-35L,6.018531076210112040815e-36L,3.009265538105056020405e-36L,
+				1.504632769052528010202e-36L,7.523163845262640051005e-37L,3.761581922631320025502e-37L,
+				1.880790961315660012751e-37L,9.403954806578300063752e-38L,4.701977403289150031876e-38L,
+				2.350988701644575015938e-38L,1.175494350822287507969e-38L,5.877471754111437539844e-39L,
+				2.938735877055718769922e-39L,1.469367938527859384961e-39L,7.346839692639296924805e-40L,
+				3.673419846319648462402e-40L,1.836709923159824231201e-40L,9.183549615799121156006e-41L,
+				4.591774807899560578003e-41L,2.295887403949780289001e-41L,1.147943701974890144501e-41L,
+				5.739718509874450722504e-42L,2.869859254937225361252e-42L,1.434929627468612680626e-42L,
+				7.174648137343063403129e-43L,3.587324068671531701565e-43L,1.793662034335765850782e-43L,
+				8.968310171678829253912e-44L,4.484155085839414626956e-44L,2.242077542919707313478e-44L,
+				1.121038771459853656739e-44L,5.605193857299268283695e-45L,2.802596928649634141847e-45L,
+				1.401298464324817070924e-45L,7.006492321624085354619e-46L,3.503246160812042677309e-46L,
+				1.751623080406021338655e-46L,8.758115402030106693273e-47L,4.379057701015053346637e-47L,
+				2.189528850507526673318e-47L,1.094764425253763336659e-47L,5.473822126268816683296e-48L,
+				2.736911063134408341648e-48L,1.368455531567204170824e-48L);
+		//printf( "%i\n", s-2);
+		return values[s - 2];
+	} else {
+		hiprec_real sum = 0.0;
+		for (int n = 2; n <= 64; n++) {
+			sum += pow(hiprec_real(n), hiprec_real(-s));
+		}
+		return sum;
+	}
+}
+
+long double polygamma(int n, hiprec_real x) {
+	using real = hiprec_real;
+	static bool init = false;
+	static constexpr int M = 220;
+	static constexpr double base = 1e38;
+	static std::vector<std::vector<hiprec_real>> coeffs;
+	static std::vector<hiprec_real> factorial(1, 1);
+	if (!init) {
+		init = true;
+		coeffs.resize(1);
+		coeffs[0].resize(M);
+		coeffs[0][0] = -0.577215664901;
+		coeffs[0][0] += -0.000000000000532860606512;
+		coeffs[0][0] += -0.00000000000000000000000009008240243104215933593992L;
+		for (int m = 1; m < M; m++) {
+			coeffs[0][m] = pow(-hiprec_real(1), hiprec_real(m + 1)) * (zetam1(m + 1) + hiprec_real(1));
+		}
+	}
+	if (n >= coeffs.size()) {
+		int p = coeffs.size();
+		int N = n + 1;
+		coeffs.resize(n + 1);
+		while (p != N) {
+			hiprec_real pfac = 1.0L;
+			for (int l = 1; l <= p; l++) {
+				pfac *= hiprec_real(l);
+			}
+			factorial.push_back(pfac);
+			coeffs[p].resize(M);
+			for (int m = 0; m < M - 1; m++) {
+				coeffs[p][m] = coeffs[p - 1][m + 1] * hiprec_real((m + 1));
+			}
+			int m = M - 1;
+			coeffs[p][m] = pow(-hiprec_real(1), hiprec_real(p + m + 1)) * (zetam1(p + m + 1) + hiprec_real(1)) * pfac;
+			p++;
+		}
+	}
+	hiprec_real y = 0.0;
+	int xi = roundl(x);
+	x -= xi;
+	xi -= 1;
+	hiprec_real x1 = x;
+	for (int m = M - 1; m >= 0; m--) {
+		y = y * x1 + coeffs[n][m];
+	}
+	hiprec_real sgn = pow(-hiprec_real(1), hiprec_real(n));
+
+	while (xi > 0) {
+		y += hiprec_real(sgn * factorial[n]) * pow(hiprec_real(x) + hiprec_real(xi), hiprec_real(-(n + 1)));
+		xi--;
+	}
+	if (xi < 0) {
+		xi = -xi;
+	}
+	while (xi > 0) {
+		y -= sgn * factorial[n] * pow(hiprec_real(x) - hiprec_real(xi - 1), -hiprec_real(n + 1));
+		xi--;
+	}
+	return y;
+}
+
 double epserr(double x0, double y0) {
 	int i, j;
 	frexp(x0, &i);
@@ -576,101 +706,188 @@ double binomial(int n, int k) {
 }
 ;
 
-float tgamma_test2(float x) {
-	static bool init = false;
-	static constexpr int N = 2;
-	static constexpr int M = 18;
-	static float co[N][M];
-	if (!init) {
-		init = true;
-		for (int n = 0; n < N; n++) {
-			co[n][0] = lgamma(n + 1);
-			double sum = -0.57721566490153286060651209008240243104215933593992;
-			for (int k = 1; k < n + 1; k++) {
-				sum += 1.0 / (double) k;
-			}
-			co[n][1] = sum;
-			//	printf( "%i %i %e\n", n, 0, co[n][1]);
-			for (int m = 2; m < M; m++) {
-				double sum = 0.0;
-				for (int k = n + 1;; k++) {
-					double prod = 1.0;
-					double kpow = k;
-					int bits = m;
-					while (bits) {
-						if (bits & 1) {
-							prod *= kpow;
-						}
-						bits >>= 1;
-						kpow *= kpow;
-					}
-					double dsum = 1.0 / prod;
-					if (std::abs(dsum / sum) < 1e-14) {
-						break;
-					}
-					sum += dsum;
-				}
-				co[n][m] = sum / m * pow(-1, m);
-			}
+double lgamma_root(double x0) {
+	long double max = x0 + 0.25;
+	long double min = x0 - 0.25;
+	min = nextafter(min, x0);
+	max = nextafter(max, x0);
+	long double err;
+	do {
+		long double mid = (max + min) * 0.5L;
+		long double fmid = lgammal(mid);
+		long double fmax = lgammal(max);
+		if (fmid * fmax > 0.0L) {
+			max = mid;
+		} else {
+			min = mid;
 		}
-	}
-	float x0 = std::floor(x);
-	float x3 = x;
-//	bool z2one = x0 == 0.0;
-//	if (z2one) {
-//		x0 += 1.0;
-//		x += 1.0;
-//	}
-	float x1 = x - x0;
-	int nn = x0 - 1;
-	int n;
-	if (x1 < 0.5) {
-		n = 0;
-	} else {
-		n = 1;
-		x1 -= 1.0;
-	}
-	float y = co[n][M - 1];
-	for (int m = M - 2; m >= 0; m--) {
-		y = fmaf(y, x1, co[n][m]);
-	}
-	y = expf(y);
-	float xi = -nn;
-	while (nn > 0) {
-		y = y * (xi + x);
-		xi++;
-		nn--;
-	}
-	while (nn < 0) {
-		xi--;
-		y = y / (xi + x);
-		nn++;
-	}
-	return y;
+		err = epserr(max, min) / std::numeric_limits<double>::epsilon();
+	} while (err > 0);
+
+	return 0.5L * (min + max);
 }
 
-double zeta(int s) {
-	double_2 sum = 0.0;
-	int nmax = pow((1ULL << 58), 1.0 / s);
-	for (int n = 1; n < nmax; n++) {
-		double k = 1;
-		double j = 1;
-		for (int m = 0; m < s; m++) {
-			k *= (double) n;
-			j *= (double) n + 1;
+double lgamma_test(double x) {
+	static bool init = false;
+	static constexpr int NROOTS = 30;
+	static constexpr int N1 = 9;
+	static constexpr int N2 = 24;
+	static constexpr int N = N1 + N2;
+	static constexpr int M1 = 21;
+	static constexpr int M = 21;
+	static constexpr int Msin = 11;
+	static constexpr int Mroot = 21;
+	static double coeffs[M][N];
+	static double sincoeffs[Msin];
+	static double rootlocs[NROOTS];
+	static double rootcoeffs[NROOTS][M];
+	static double rootspans[NROOTS];
+	static double Xc[N];
+	if (!init) {
+		init = true;
+		for (int n = 0; n < N1; n++) {
+			Xc[n] = hiprec_real(n) / hiprec_real(4) + hiprec_real(1);
+			coeffs[0][n] = lgamma(Xc[n]);
+			double mfac = 1.0;
+			for (int m = 1; m < M1; m++) {
+				mfac *= m;
+				coeffs[m][n] = polygamma(m - 1, Xc[n]) / mfac;
+			}
+			for (int m = M1; m < M; m++) {
+				coeffs[m][n] = 0.0;
+			}
 		}
-		double b = ((double) (n - s)) / (double) k;
-		double a = (double) n / (double) j;
-		sum.y += a - b;
-		sum = double_2::quick_two_sum(sum.x, sum.y);
+		for (int n = N1; n < N; n++) {
+			int i = n - N1;
+			hiprec_real a = 2.0 + pow(2, i);
+			hiprec_real b = 2.0 + pow(2, i + 1);
+			double xc = 0.5 * (a + b);
+			hiprec_real span = double(a - b) * 0.5;
+			Xc[n] = xc;
+			std::function<hiprec_real(hiprec_real)> func = [a,b](hiprec_real x) {
+				const auto sum = a + b;
+				const auto dif = b - a;
+				const auto half = hiprec_real(0.5);
+				x = half*(sum + dif * x);
+				return log(gamma(x));
+			};
+			auto chebies = ChebyCoeffs(func, std::numeric_limits<double>::epsilon() * 0.5, 0);
+			chebies.resize(M, 0.0);
+			for (int i = 0; i < chebies.size(); i++) {
+				coeffs[i][n] = chebies[i];	// * pow(span, -hiprec_real(i));
+			}
+			for (int n = 0; n < Msin; n++) {
+				const hiprec_real pi = hiprec_real(4) * atan(hiprec_real(1));
+				sincoeffs[n] = pow(hiprec_real(pi), hiprec_real(2 * n + 1)) * pow(hiprec_real(-1), hiprec_real(n)) / factorial(2 * n + 1) / pi;
+			}
+		}
+		double x0 = -2.25;
+		int n = 0;
+		while (x0 > -17.0) {
+			double xrt = lgamma_root(x0);
+			rootlocs[n] = xrt;
+			rootcoeffs[n][0] = lgamma(xrt);
+			long double mfac = 1.0;
+			for (int m = 1; m < M; m++) {
+				mfac *= m;
+				rootcoeffs[n][m] =  polygamma(m - 1, xrt) / mfac;
+			}
+			int m = Mroot - 1;
+			rootspans[n] = pow(0.5 * std::numeric_limits<double>::epsilon() / fabs(rootcoeffs[n][m]), 1.0 / (m));
+			x0 -= 0.5;
+			n++;
+		}
 	}
-	sum = sum / double_2(s - 1);
-	return (double) sum.x + (double) sum.y;
+	double y, z;
+	int ic;
+	double x0 = x;
+	double logx = log(abs(x));
+	double logy, x2;
+	bool inv = false;
+	bool neg = false;
+	if (x < 0.0) {
+		neg = true;
+		bool nearroot = false;
+		double xroot, xspan;
+		x = -x;
+		ic = floor(x);
+		if (ic >= 2) {
+			ic -= 2;
+			xroot = rootlocs[2 * ic];
+			xspan = rootspans[2 * ic];
+			if (fabs(x0 - xroot) < xspan) {
+				nearroot = true;
+				ic = 2 * ic;
+			} else {
+				xroot = rootlocs[2 * ic + 1];
+				xspan = rootspans[2 * ic + 1];
+				if (fabs(x0 - xroot) < xspan) {
+					nearroot = true;
+					ic = 2 * ic + 1;
+				}
+			}
+		}
+		if (nearroot) {
+		//	printf("evaluating near root\n");
+			y = 0.0;
+			x = x0 - xroot;
+		//	printf( "%e\n", x);
+			for (int m = Mroot - 1; m >= 0; m--) {
+				y = fma(x, y, rootcoeffs[ic][m]);
+			}
+			return y;
+		}
+	}
+	if (x < 0.9) {
+		inv = true;
+		x += 1.0;
+	}
+	if (x < 3.1) {
+		ic = (x - 1.0 + 0.125) * 4.0;
+	} else if (x < (1 << 23)) {
+		z = x - 2.0;
+		ic = ilogb(z) + N1;
+	} else {
+		return x * (logx - 1.0) + 0.5 * log(2.0 * M_PI / x);
+	}
+	z = x - Xc[ic];
+	double dz = (pow(2, ic - N1 + 1) - pow(2, ic - N1)) * 0.5;
+	if (ic >= N1) {
+		z /= dz;
+	}
+	y = 0.0;
+	for (int m = M - 1; m >= 0; m--) {
+		y = fma(z, y, coeffs[m][ic]);
+	}
+	if (inv) {
+		y -= logx;
+	}
+
+	if (neg) {
+		x = x0 - floor(x0);
+		if (x > 0.5) {
+			x = 1.0 - (x0 - floor(x0));
+		}
+		z = 0.0;
+		x2 = x * x;
+		for (int m = Msin - 1; m >= 0; m--) {
+			z = fma(z, x2, sincoeffs[m]);
+		}
+		z *= x;
+		y += log(abs(z)) + logx;
+		y = -y;
+	}
+	return y;
 }
 
 int main() {
 	using namespace simd;
 	double s, c;
+	for(double r = -3.0; r <= 20.0; r+=0.04) {\
+	//	printf( "%e %e\n", r,(double)polygamma(2, r));
+
+	}
+	//return 0;
 	srand (time(NULL));double
 	maxe = 0.0;
 	double avge = 0.0;
@@ -680,77 +897,76 @@ int main() {
 	double xmax = 168.0;
 	int Na = 100;
 	int i = 0;
-	/*while( i < Na ) {
-		double err, a, b;
-		double x = rand1()*(xmax-xmin) + xmin;
-		x = -x;
-		a = tgammal(x);
-		b = tgamma(simd_f64(x))[0];
+	double a, b, err;
+	for (double x = -6.0; x < 6.0; x += 0.001) {
+		N++;
+		a = lgammal(x);
+		b = lgamma_test(x);
+		c = x * log(x) - x + 0.5 * log(2.0 * M_PI / x);
 		err = epserr(a, b) / eps;
-		if( err > 7 ) {
-			i++;
-			maxe = std::max(maxe, err);
-			avge += err;
-			printf("%e %e %e %e\n", x, b, a, err );
-		}
+		maxe = std::max(maxe, err);
+		avge += err;
+		printf("%e %e %e %e\n", x, b, a, err);
+
 	}
 	avge /= N;
-	return 0;*/
-	printf("%e %e \n", maxe / eps, avge / eps);
+	printf("%e %e \n", maxe, avge);
 //	TEST2(float, simd_f32, pow, powf, pow, 1e-3, 1e3, .01, 10, true);
 //TEST1(double, simd_f64, log2, log2, log2_precise, .0001, 100000, true);
 //	TEST1(double, simd_f64, exp, exp, exp, -600.0, 600.0, true);
+	return 0;
+	TEST1(double, simd_f64, lgamma, lgamma, lgamma, -167, 167.000, true);
 
 	printf("Testing SIMD Functions\n");
 	printf("\nSingle Precision\n");
 	printf("name   speed        avg err      max err\n");
 
-	TEST1(float, simd_f32, asin, asinf, asin, -1, 1, true);
-	TEST1(float, simd_f32, acos, acosf, acos, -1, 1, true);
-	TEST1(float, simd_f32, atan, atanf, atan, -10.0, 10.0, true);
-	TEST1(float, simd_f32, acosh, acoshf, acosh, 1.001, 10.0, true);
-	TEST1(float, simd_f32, asinh, asinhf, asinh, .001, 10, true);
-	TEST1(float, simd_f32, atanh, atanhf, atanh, 0.001, 0.999, true);
-	TEST2(float, simd_f32, pow, pow, pow, .1, 10, -30, 30, true);
-	TEST1(float, simd_f32, exp, expf, exp, -86.0, 86.0, true);
-	TEST1(float, simd_f32, exp2, exp2f, exp2, -125.0, 125.0, true);
-	TEST1(float, simd_f32, expm1, expm1f, expm1, -2.0, 2.0, true);
-	TEST1(float, simd_f32, log, logf, log, exp(-1), exp(40), true);
-	TEST1(float, simd_f32, log2, log2f, log2, 0.00001, 100000, true);
-	TEST1(float, simd_f32, log1p, log1pf, log1p, exp(-3), exp(3), true);
-	TEST1(float, simd_f32, erf, erff, erf, -7, 7, true);
-	TEST1(float, simd_f32, erfc, erfcf, erfc, -8.9, 8.9, true);
-	TEST1(float, simd_f32, tgamma, tgammaf, tgamma, -33, 33.0, true);
-	TEST1(float, simd_f32, cosh, coshf, cosh, -10.0, 10.0, true);
-	TEST1(float, simd_f32, sinh, sinhf, sinh, -10.0, 10.0, true);
-	TEST1(float, simd_f32, tanh, tanhf, tanh, -10.0, 10.0, true);
-	TEST1(float, simd_f32, sin, sinf, sin, -2 * M_PI, 2 * M_PI, true);
-	TEST1(float, simd_f32, cos, cosf, cos, -2 * M_PI, 2 * M_PI, true);
-	TEST1(float, simd_f32, tan, tanf, tan, -2 * M_PI, 2 * M_PI, true);
-	printf("\nDouble Precision\n");
-	printf("name   speed        avg err      max err\n");
-	TEST1(double, simd_f64, asin, asin, asin, -1, 1, true);
-	TEST1(double, simd_f64, acos, acos, acos, -1 + 1e-6, 1 - 1e-6, true);
-	TEST1(double, simd_f64, atan, atan, atan, -10.0, 10.0, true);
-	TEST1(double, simd_f64, tgamma, tgamma, tgamma, -167, 167.000, true);
-	TEST1(double, simd_f64, acosh, acosh, acosh, 1.001, 10.0, true);
-	TEST1(double, simd_f64, asinh, asinh, asinh, .001, 10, true);
-	TEST1(double, simd_f64, atanh, atanh, atanh, 0.001, 0.999, true);
-	TEST2(double, simd_f64, pow, pow, pow, .1, 10, -300, 300, true);
-	TEST1(double, simd_f64, exp, exp, exp, -600.0, 600.0, true);
-	TEST1(double, simd_f64, exp2, exp2, exp2, -1000.0, 1000.0, true);
-	TEST1(double, simd_f64, expm1, expm1, expm1, -2.0, 2.0, true);
-	TEST1(double, simd_f64, log, log, log, exp(-1), exp(40), true);
-	TEST1(double, simd_f64, log2, log2, log2, .0001, 100000, true);
-	TEST1(double, simd_f64, log1p, log1p, log1p, exp(-3), exp(3), true);
-	TEST1(double, simd_f64, erf, erf, erf, -9, 9, true);
-	TEST1(double, simd_f64, erfc, erfc, erfc, -25.0, 25.0, true);
-	TEST1(double, simd_f64, cosh, cosh, cosh, -10.0, 10.0, true);
-	TEST1(double, simd_f64, sinh, sinh, sinh, -10.0, 10.0, true);
-	TEST1(double, simd_f64, tanh, tanh, tanh, -10.0, 10.0, true);
-	TEST1(double, simd_f64, sin, sin, sin, -2.0 * M_PI, 2.0 * M_PI, true);
-	TEST1(double, simd_f64, cos, cos, cos, -2.0 * M_PI, 2.0 * M_PI, true);
-	TEST1(double, simd_f64, tan, tan, tan, -2.0 * M_PI, 2.0 * M_PI, true);
+	/*TEST1(float, simd_f32, asin, asinf, asin, -1, 1, true);
+	 TEST1(float, simd_f32, acos, acosf, acos, -1, 1, true);
+	 TEST1(float, simd_f32, atan, atanf, atan, -10.0, 10.0, true);
+	 TEST1(float, simd_f32, acosh, acoshf, acosh, 1.001, 10.0, true);
+	 TEST1(float, simd_f32, asinh, asinhf, asinh, .001, 10, true);
+	 TEST1(float, simd_f32, atanh, atanhf, atanh, 0.001, 0.999, true);
+	 TEST2(float, simd_f32, pow, pow, pow, .1, 10, -30, 30, true);
+	 TEST1(float, simd_f32, exp, expf, exp, -86.0, 86.0, true);
+	 TEST1(float, simd_f32, exp2, exp2f, exp2, -125.0, 125.0, true);
+	 TEST1(float, simd_f32, expm1, expm1f, expm1, -2.0, 2.0, true);
+	 TEST1(float, simd_f32, log, logf, log, exp(-1), exp(40), true);
+	 TEST1(float, simd_f32, log2, log2f, log2, 0.00001, 100000, true);
+	 TEST1(float, simd_f32, log1p, log1pf, log1p, exp(-3), exp(3), true);
+	 TEST1(float, simd_f32, erf, erff, erf, -7, 7, true);
+	 TEST1(float, simd_f32, erfc, erfcf, erfc, -8.9, 8.9, true);
+	 TEST1(float, simd_f32, tgamma, tgammaf, tgamma, -33, 33.0, true);
+	 TEST1(float, simd_f32, cosh, coshf, cosh, -10.0, 10.0, true);
+	 TEST1(float, simd_f32, sinh, sinhf, sinh, -10.0, 10.0, true);
+	 TEST1(float, simd_f32, tanh, tanhf, tanh, -10.0, 10.0, true);
+	 TEST1(float, simd_f32, sin, sinf, sin, -2 * M_PI, 2 * M_PI, true);
+	 TEST1(float, simd_f32, cos, cosf, cos, -2 * M_PI, 2 * M_PI, true);
+	 TEST1(float, simd_f32, tan, tanf, tan, -2 * M_PI, 2 * M_PI, true);
+	 printf("\nDouble Precision\n");
+	 printf("name   speed        avg err      max err\n");
+	 TEST1(double, simd_f64, asin, asin, asin, -1, 1, true);
+	 TEST1(double, simd_f64, acos, acos, acos, -1 + 1e-6, 1 - 1e-6, true);
+	 TEST1(double, simd_f64, atan, atan, atan, -10.0, 10.0, true);
+	 TEST1(double, simd_f64, tgamma, tgamma, tgamma, -167, 167.000, true);
+	 TEST1(double, simd_f64, acosh, acosh, acosh, 1.001, 10.0, true);
+	 TEST1(double, simd_f64, asinh, asinh, asinh, .001, 10, true);
+	 TEST1(double, simd_f64, atanh, atanh, atanh, 0.001, 0.999, true);
+	 TEST2(double, simd_f64, pow, pow, pow, .1, 10, -300, 300, true);
+	 TEST1(double, simd_f64, exp, exp, exp, -600.0, 600.0, true);
+	 TEST1(double, simd_f64, exp2, exp2, exp2, -1000.0, 1000.0, true);
+	 TEST1(double, simd_f64, expm1, expm1, expm1, -2.0, 2.0, true);
+	 TEST1(double, simd_f64, log, log, log, exp(-1), exp(40), true);
+	 TEST1(double, simd_f64, log2, log2, log2, .0001, 100000, true);
+	 TEST1(double, simd_f64, log1p, log1p, log1p, exp(-3), exp(3), true);
+	 TEST1(double, simd_f64, erf, erf, erf, -9, 9, true);
+	 TEST1(double, simd_f64, erfc, erfc, erfc, -25.0, 25.0, true);
+	 TEST1(double, simd_f64, cosh, cosh, cosh, -10.0, 10.0, true);
+	 TEST1(double, simd_f64, sinh, sinh, sinh, -10.0, 10.0, true);
+	 TEST1(double, simd_f64, tanh, tanh, tanh, -10.0, 10.0, true);
+	 TEST1(double, simd_f64, sin, sin, sin, -2.0 * M_PI, 2.0 * M_PI, true);
+	 TEST1(double, simd_f64, cos, cos, cos, -2.0 * M_PI, 2.0 * M_PI, true);
+	 TEST1(double, simd_f64, tan, tan, tan, -2.0 * M_PI, 2.0 * M_PI, true);*/
 
 	/*
 

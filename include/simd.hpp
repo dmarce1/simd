@@ -1169,6 +1169,7 @@ inline simd_i64::simd_i64(const simd_f64& other) {
 }
 
 simd_f64 tgamma(simd_f64);
+simd_f64 lgamma(simd_f64);
 
 inline simd_f64 sqrt(simd_f64 x) {
 	x.v = _mm256_sqrt_pd(x.v);
