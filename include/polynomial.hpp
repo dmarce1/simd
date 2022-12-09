@@ -16,7 +16,7 @@ using polynomial = std::vector<hiprec_real>;
 
 inline polynomial poly_add(const polynomial& A, const polynomial& B) {
 	polynomial C;
-	if (A.size() > B.size()) {
+	if (A.size() >= B.size()) {
 		C = A;
 		for (int i = 0; i < B.size(); i++) {
 			C[i] += B[i];
@@ -30,7 +30,7 @@ inline polynomial poly_add(const polynomial& A, const polynomial& B) {
 
 inline polynomial poly_sub(const polynomial& A, const polynomial& B) {
 	polynomial C;
-	if (A.size() > B.size()) {
+	if (A.size() >= B.size()) {
 		C = A;
 		for (int i = 0; i < B.size(); i++) {
 			C[i] -= B[i];

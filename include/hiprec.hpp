@@ -15,17 +15,17 @@ class hiprec_real {
 	mpfr_t q;
 public:
 	hiprec_real() {
-		mpfr_init2(q, 600);
+		mpfr_init2(q, 512);
 	}
 	~hiprec_real() {
 		mpfr_clear(q);
 	}
 	hiprec_real(const hiprec_real& other) {
-		mpfr_init2(q, 600);
+		mpfr_init2(q, 512);
 		*this = other;
 	}
 	hiprec_real(hiprec_real&& other) {
-		mpfr_init2(q, 600);
+		mpfr_init2(q, 512);
 		*this = std::move(other);
 	}
 	hiprec_real& operator=(const hiprec_real& other) {
@@ -37,15 +37,15 @@ public:
 		return *this;
 	}
 	hiprec_real(long double a) {
-		mpfr_init2(q, 600);
+		mpfr_init2(q, 512);
 		mpfr_set_ld(q, a, MPFR_RNDN);
 	}
 	hiprec_real(double a) {
-		mpfr_init2(q, 600);
+		mpfr_init2(q, 512);
 		mpfr_set_d(q, a, MPFR_RNDN);
 	}
 	hiprec_real(int a) {
-		mpfr_init2(q, 600);
+		mpfr_init2(q, 512);
 		mpfr_set_si(q, a, MPFR_RNDN);
 	}
 	operator double() const {
