@@ -904,7 +904,8 @@ double tgamma_test(double x) {
 	return y;
 }
 
-double lgamma_test(double x, bool& rooteval) {
+double lgamma_test(double x_) {
+	using namespace simd;
 	static bool init = false;
 	constexpr int NCHEBY = 12;
 	static constexpr int NROOTS = 26;
@@ -940,7 +941,6 @@ double lgamma_test(double x, bool& rooteval) {
 			double span1 = std::min(pow(eps * fabs(co[0] / co.back()), 1.0 / (co.size() - 1)), 0.5);
 			double a = xrt < -0.5 ? std::min(((fabs(xrt)) / 5.5), 0.80) : 1.0;
 			double span2 = (0.5 + a * 0.5) * fabs(xrt - round(xrt));
-			printf( "%e %e\n", xrt, a);
 			span2 = nextafter(span2, 0.0);
 			if (n % 2 == 0) {
 				rootbegin[n] = xrt - span1;
@@ -1011,11 +1011,7 @@ double lgamma_test(double x, bool& rooteval) {
 				return hiprec_real(1) / gamma(x);
 			};
 			double norm = 1;
-			auto chebies = ChebyCoeffs(func, std::numeric_limits<double>::epsilon() * fabs(norm), 0);
-			if (chebies.size() > M && n != 3 && n != 4) {
-				printf("Chebies too big %i\n", chebies.size());
-				//	abort();
-			}
+			auto chebies = ChebyCoeffs2(func, M+1, 0);
 			chebies.resize(M, 0.0);
 			for (int m = 0; m < chebies.size(); m++) {
 				coeffs[m][n] = chebies[m] * pow(span, hiprec_real(-m));
@@ -1042,73 +1038,79 @@ double lgamma_test(double x, bool& rooteval) {
 		bias[Ntot - 1] = 0.0;
 
 	}
-	const auto logxor1px = [](double x, double xm1) {
-		int k, j;
-		double x1, z, z2, y, x0;
-		x0 = x * M_SQRT2;
+	const auto logxor1px = [](simd_f64 x, simd_f64 xm1) {
+		simd_f64 x1, z, z2, y, x0;
+		simd_i64 k, j;
+		x0 = x * simd_f64(M_SQRT2);
 		frexp(x0, &j);
-		x1 = 2.0 * frexp(x, &k);
-		j--;
-		k--;
+		x1 = simd_f64(2) * frexp(x, &k);
+		j = j - simd_f64(1);
+		k = k - simd_f64(1);
 		k -= j;
 		x1 = ldexp(x1, k);
-		if( j == 0 ) {
-			z = xm1 / (xm1 + 2.0);
-		} else {
-			z = (x1-1.0)/(x1+1.0);
-		}
+		z = blend( (x1 - simd_f64(1)) / (x1 + simd_f64(1)), xm1 / (xm1 + simd_f64(2)), j == simd_i64(0));
 		z2 = z * z;
-		y = 0.0;
-		for( int n = Mlog - 1; n >= 0; n--) {
-			y = fma(y, z2, 2.0 / (1.0 + 2.0 * n));
+		y = simd_f64(2.0 / (1.0 + 2.0 *(Mlog-1)));
+		for( int n = Mlog - 2; n >= 0; n--) {
+			y = fma(y, z2, simd_f64(2.0 / (1.0 + 2.0 * n)));
 		}
 		y *= z;
-		y += j * log(2);
+		y += simd_f64(j) * simd_f64(log(2));
 		return y;
 	};
-	double y, z, x0, zm1, logx, r, x2;
-	double_2 Y;
-	int ic;
-	bool nearroot;
-	bool nearroot1, nearroot2;
-	bool asym;
-	bool neg;
-	bool yneg;
+	simd_f64 x = x_;
+	simd_f64 y, z, x0, zm1, logx, r, b, c, x2;
+	simd_i64 ic, nearroot, nearroot1, nearroot2, asym, neg, yneg;
+	simd_f64_2 Y;
 	x0 = x;
-	ic = std::min(std::max(2 * std::max((int) floor(-x) - 1, 0), 0), NROOTS - 2);
-	nearroot1 = (x > rootbegin[ic] && x < rootend[ic]);
-	nearroot2 = (x > rootbegin[ic + 1] && x < rootend[ic + 1]);
+	//	ic = std::min(2 * std::max((int) floor(-x) - 1, 0), NROOTS - 2);
+	ic = simd_i64(min(simd_f64(2) * max(floor(-x - simd_f64(1)), simd_f64(0)), simd_f64(NROOTS - 2)));
+//	nearroot1 = (x > rootbegin[ic] && x < rootend[ic]);
+	nearroot1 = (x > c.gather(rootbegin, ic) && x < c.gather(rootend, ic));
+	nearroot2 = (x > c.gather(rootbegin, ic + simd_i64(1)) && x < c.gather(rootend, ic + simd_i64(1)));
 	nearroot = nearroot1 || nearroot2;
-	rooteval = nearroot;
-	neg = !nearroot && (x <= -3.5);
-	x = neg ? -x : x;
-	asym = !nearroot && (x >= 7.5);
-	ic = nearroot ? (ic + NCHEBY + nearroot2) : (asym ? Ntot - 1 : round(x) + 3.0);
-	z = asym ? 1.0 / x : x - Xc[ic];
-	y = 0.0;
-	for (int m = M - 1; m >= 0; m--) {
-		y = fma(y, z, coeffs[m][ic]);
+	neg = !nearroot && (x <= simd_f64(-3.5));
+//	x = neg ? -x : x;
+	x = blend(x, -x, neg);
+//	asym = !nearroot && (x >= 7.5);
+	asym = !nearroot && (x >= simd_f64(7.5));
+	ic = blend(blend(simd_i64(round(x)) + simd_i64(3), simd_i64(Ntot - 1), asym), ic + simd_i64(NCHEBY) + nearroot2, nearroot);
+//	ic = nearroot ? (ic +  + nearroot2) : (asym ? Ntot - 1 : );
+	//z = asym ? 1.0 / x : x - Xc[ic];
+	z = blend(x - c.gather(Xc, ic), simd_f64(1) / x, asym);
+	y = c.gather(coeffs[M - 1], ic);
+	for (int m = M - 2; m >= 0; m--) {
+		y = fma(y, z, c.gather(coeffs[m], ic));
 	}
 	logx = log(x);
-	y = asym ? 1.0 / y : y;
-	yneg = bias[ic] + y < 0.0;
-	z = yneg ? -y - bias[ic] : bias[ic] + y;
-	zm1 = yneg ? -y - (1.0 + bias[ic]) : y - (1.0 - bias[ic]);
+	//y = asym ? 1.0 / y : y;
+	y = blend(y, simd_f64(1) / y, asym);
+//	yneg = bias[ic] + y < 0.0;
+	b.gather(bias, ic);
+	yneg = b + y < simd_f64(0);
+//z = yneg ? -y - bias[ic] : bias[ic] + y;
+	z = blend(b + y, -y - b, yneg);
+//	zm1 = yneg ? -y - (1.0 + bias[ic]) : y - (1.0 - bias[ic]);
+	zm1 = blend(y - (simd_f64(1) - b), -y - (simd_f64(1) + b), yneg);
 	y = -logxor1px(z, zm1);
-	if (asym) {
-		y += -x + (x - 0.5) * logx + 0.5 * log(2.0 * M_PI);
-	}
+//	if (asym) {
+//		y += -x + (x - 0.5) * logx + 0.5 * log(2.0 * M_PI);
+//	}
+	y += blend(simd_f64(0), -x + (x - simd_f64(0.5)) * logx + simd_f64(0.5 * log(2.0 * M_PI)), asym);
 	r = x0 - floor(x0);
-	r = r > 0.5 ? 1 - (x0 - floor(x0)) : r;
+//	r = r > 0.5 ? 1 - (x0 - floor(x0)) : r;
+	r = blend(r, simd_f64(1) - r, r > simd_f64(0.5));
 	x2 = r * r;
-	z = 0.0;
-	for (int m = Msin - 1; m >= 0; m--) {
-		z = fma(z, x2, logsincoeffs[m]);
+//	z = 0.0;
+	z = simd_f64(logsincoeffs[Msin - 1]);
+	for (int m = Msin - 2; m >= 0; m--) {
+		z = fma(z, x2, simd_f64(logsincoeffs[m]));
 	}
-	Y = double_2::quick_two_sum(log(abs(r)), z);
-	Y = Y + double_2::two_sum(y, logx);
-	y = neg ? -Y.x : y;
-	return y;
+	Y = simd_f64_2::quick_two_sum(log(abs(r)), z);
+	Y = Y + simd_f64_2::two_sum(y, logx);
+	//	y = neg ? -Y.x : y;
+	y = blend(y, -Y.x, neg);
+	return y[0];
 }
 
 int main() {
@@ -1127,23 +1129,18 @@ int main() {
 	int i = 0;
 	double a, b, err;
 	int maxerr = 0;
-	while (1) {
-//	for (double x = -20; x < 20; x += rand1() * 0.01) {
-		double x = rand1() * (-2 - -17) + -17;
-		bool root;
+	//while (1) {
+	for (double x = -1000.111; x < 1000; x += rand1() * 0.1) {
 		a = lgammal(x);
-		b = lgamma_test(x, root);
+		b = lgamma_test(x);
 		err = epserr(a, b) / eps;
-		if(std::isinf(err)) {
-			continue;
-		}
 		maxe = std::max(maxe, err);
 		avge += err;
 		N++;
-		if (err > maxerr) {
-			maxerr = err;
-			printf("%e %i %e %e %e | %e %e \n", x, root, b, a, err, maxe, avge / N);
-		}
+		//	if (err > maxerr) {
+		maxerr = err;
+		printf("%e %e %e %e \n", x, b, a, err);
+//		}
 	}
 	avge /= N;
 	printf("%e %e \n", maxe, avge);

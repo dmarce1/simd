@@ -1145,13 +1145,9 @@ inline simd_f64 frexp(simd_f64 x, simd_i64* e) {
 }
 
 inline simd_f64 ldexp(simd_f64 x, simd_i64 e) {
-	simd_i64 i, j;
-	i = (simd_i64) x;
-	i &= simd_i64(0x800FFFFFFFFFFFF);
 	e += simd_i64(1023);
 	e <<= (long long) 52;
-	i = i | e;
-	x = (simd_f64&) i;
+	x *= (simd_f64&) e;
 	return x;
 }
 
