@@ -904,13 +904,14 @@ double tgamma_test(double x) {
 	return y;
 }
 
-double lgamma_test(double x) {
+double lgamma_test(double x, bool& rooteval) {
 	static bool init = false;
 	constexpr int NCHEBY = 12;
 	static constexpr int NROOTS = 26;
 	constexpr int Ntot = NROOTS + NCHEBY + 1;
 	constexpr int M = 21;
 	constexpr int Msin = 20;
+	constexpr int Mlog = 10;
 	static double coeffs[M][Ntot];
 	static double bias[Ntot];
 	static double Xc[Ntot];
@@ -937,7 +938,9 @@ double lgamma_test(double x) {
 			auto co = gammainv_coeffs(M, xrt);
 			const double eps = 0.5 * std::numeric_limits<double>::epsilon();
 			double span1 = std::min(pow(eps * fabs(co[0] / co.back()), 1.0 / (co.size() - 1)), 0.5);
-			double span2 = 0.8 * fabs(xrt - round(xrt));
+			double a = xrt < -0.5 ? std::min(((fabs(xrt)) / 5.5), 0.80) : 1.0;
+			double span2 = (0.5 + a * 0.5) * fabs(xrt - round(xrt));
+			printf( "%e %e\n", xrt, a);
 			span2 = nextafter(span2, 0.0);
 			if (n % 2 == 0) {
 				rootbegin[n] = xrt - span1;
@@ -1036,100 +1039,75 @@ double lgamma_test(double x) {
 				bias[nn] = 0.0;
 			}
 		}
+		bias[Ntot - 1] = 0.0;
 
 	}
-	double y, z, x0;
-	int ic;
-	x0 = x;
-	bool nearroot = false;
-	double xspan;
-	double xroot;
-	if (x > 0.0) {
-		ic = 0;
-	} else {
-		ic = 2 * std::max((int) floor(-x) - 1, 0);
-	}
-	bool asym = false;
-	bool neg = false;
-	if (ic < NROOTS) {
-		double xb1 = rootbegin[ic];
-		double xe1 = rootend[ic];
-		double xb2 = rootbegin[ic + 1];
-		double xe2 = rootend[ic + 1];
-		if (x > xb1 && x < xe1) {
-			nearroot = true;
-			xroot = rootlocs[ic];
-			ic = ic + NCHEBY;
-		} else if (x > xb2 && x < xe2) {
-			nearroot = true;
-			xroot = rootlocs[ic + 1];
-			ic = ic + NCHEBY + 1;
-		}
-	}
-	if (!nearroot) {
-		if (x <= -3.5) {
-			x = -x;
-			neg = true;
-		}
-		if (x > 7.5) {
-			asym = true;
-			ic = Ntot - 1;
-			z = 1.0 / x;
+	const auto logxor1px = [](double x, double xm1) {
+		int k, j;
+		double x1, z, z2, y, x0;
+		x0 = x * M_SQRT2;
+		frexp(x0, &j);
+		x1 = 2.0 * frexp(x, &k);
+		j--;
+		k--;
+		k -= j;
+		x1 = ldexp(x1, k);
+		if( j == 0 ) {
+			z = xm1 / (xm1 + 2.0);
 		} else {
-			ic = round(x) + 3.0;
-			z = x - Xc[ic];
+			z = (x1-1.0)/(x1+1.0);
 		}
-	} else {
-		z = x0 - xroot;
-		//	printf("root at %.17e  %e\n", xroot, z);
-	}
+		z2 = z * z;
+		y = 0.0;
+		for( int n = Mlog - 1; n >= 0; n--) {
+			y = fma(y, z2, 2.0 / (1.0 + 2.0 * n));
+		}
+		y *= z;
+		y += j * log(2);
+		return y;
+	};
+	double y, z, x0, zm1, logx, r, x2;
+	double_2 Y;
+	int ic;
+	bool nearroot;
+	bool nearroot1, nearroot2;
+	bool asym;
+	bool neg;
+	bool yneg;
+	x0 = x;
+	ic = std::min(std::max(2 * std::max((int) floor(-x) - 1, 0), 0), NROOTS - 2);
+	nearroot1 = (x > rootbegin[ic] && x < rootend[ic]);
+	nearroot2 = (x > rootbegin[ic + 1] && x < rootend[ic + 1]);
+	nearroot = nearroot1 || nearroot2;
+	rooteval = nearroot;
+	neg = !nearroot && (x <= -3.5);
+	x = neg ? -x : x;
+	asym = !nearroot && (x >= 7.5);
+	ic = nearroot ? (ic + NCHEBY + nearroot2) : (asym ? Ntot - 1 : round(x) + 3.0);
+	z = asym ? 1.0 / x : x - Xc[ic];
 	y = 0.0;
 	for (int m = M - 1; m >= 0; m--) {
 		y = fma(y, z, coeffs[m][ic]);
 	}
-	double logx = log(x);
+	logx = log(x);
+	y = asym ? 1.0 / y : y;
+	yneg = bias[ic] + y < 0.0;
+	z = yneg ? -y - bias[ic] : bias[ic] + y;
+	zm1 = yneg ? -y - (1.0 + bias[ic]) : y - (1.0 - bias[ic]);
+	y = -logxor1px(z, zm1);
 	if (asym) {
-		y = log(y);
 		y += -x + (x - 0.5) * logx + 0.5 * log(2.0 * M_PI);
-	} else {
-		if (bias[ic] > 0.5) {
-			if (1.0 + y < 0.0) {
-				y = -(y + 2.0);
-			}
-			{
-				y = -log1p(y);
-			}
-		} else if (bias[ic] < -0.5) {
-			if (-1.0 + y < 0.0) {
-				y = -log1p(-y);
-			} else {
-				y = -log(y - 1.0);
-			}
-		} else {
-			y += bias[ic];
-			y = -log(abs(y));
-		}
-
-		/* else {
-		 y = -log1p(y - 1.0);
-		 }*/
 	}
-	if (neg) {
-		double r;
-		r = x0 - floor(x0);
-		if (r > 0.5) {
-			r = 1 - (x0 - floor(x0));
-		}
-		z = 0.0;
-		double x2 = r * r;
-		for (int m = Msin - 1; m >= 0; m--) {
-			z = fma(z, x2, logsincoeffs[m]);
-		}
-		double_2 Y(y);
-		Y = double_2::quick_two_sum(log(abs(r)), z);
-		Y = Y + double_2::two_sum(y, logx);
-		y = -Y.x;
+	r = x0 - floor(x0);
+	r = r > 0.5 ? 1 - (x0 - floor(x0)) : r;
+	x2 = r * r;
+	z = 0.0;
+	for (int m = Msin - 1; m >= 0; m--) {
+		z = fma(z, x2, logsincoeffs[m]);
 	}
+	Y = double_2::quick_two_sum(log(abs(r)), z);
+	Y = Y + double_2::two_sum(y, logx);
+	y = neg ? -Y.x : y;
 	return y;
 }
 
@@ -1148,14 +1126,24 @@ int main() {
 	int Na = 100;
 	int i = 0;
 	double a, b, err;
-	for (double x = -171.5; x < 171.5; x += rand1() * 0.01) {
-		a = tgammal(x);
-		b = tgamma_test(x);
+	int maxerr = 0;
+	while (1) {
+//	for (double x = -20; x < 20; x += rand1() * 0.01) {
+		double x = rand1() * (-2 - -17) + -17;
+		bool root;
+		a = lgammal(x);
+		b = lgamma_test(x, root);
 		err = epserr(a, b) / eps;
+		if(std::isinf(err)) {
+			continue;
+		}
 		maxe = std::max(maxe, err);
 		avge += err;
 		N++;
-		printf("%e %e %e %e\n", x, b, a, err);
+		if (err > maxerr) {
+			maxerr = err;
+			printf("%e %i %e %e %e | %e %e \n", x, root, b, a, err, maxe, avge / N);
+		}
 	}
 	avge /= N;
 	printf("%e %e \n", maxe, avge);
