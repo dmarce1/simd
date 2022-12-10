@@ -68,9 +68,7 @@ hiprec_real polygamma(int n, hiprec_real x) {
 		init = true;
 		coeffs.resize(1);
 		coeffs[0].resize(M);
-		coeffs[0][0] = -0.577215664901;
-		coeffs[0][0] += -0.000000000000532860606512;
-		coeffs[0][0] += -0.00000000000000000000000009008240243104215933593992L;
+		coeffs[0][0] = digamma(1.0);
 		for (int m = 1; m < M; m++) {
 			coeffs[0][m] = pow(-hiprec_real(1), hiprec_real(m + 1)) * (zetam1(m + 1) + hiprec_real(1));
 		}
@@ -96,7 +94,7 @@ hiprec_real polygamma(int n, hiprec_real x) {
 	}
 	hiprec_real y = 0.0;
 	int xi = roundl(x);
-	x -= xi;
+	x -= hiprec_real(xi);
 	xi -= 1;
 	hiprec_real x1 = x;
 	for (int m = M - 1; m >= 0; m--) {
@@ -696,7 +694,7 @@ double tgamma_test(double x) {
 	static bool init = false;
 	constexpr int NCHEBY = 12;
 	constexpr int Ntot = NCHEBY + 1;
-	constexpr int M = 23;
+	constexpr int M = 32;
 	constexpr int Msin = 30;
 	static double coeffs[M][Ntot];
 	static double sincoeffs[Msin];
@@ -865,22 +863,147 @@ double tgamma_test(double x) {
 	return y;
 }
 
+std::vector<double> gammainv_coeffs(int N, hiprec_real x) {
+	using ptype = std::vector<int>;
+	struct dtype {
+		ptype poly;
+		hiprec_real c0;
+	};
+	std::vector<double> res;
+	const auto derivative = [N](const std::vector<dtype>& d0) {
+		std::vector<dtype> d1;
+		for( int n = 0; n < d0.size(); n++) {
+			dtype d;
+			d = d0[n];
+			d.c0 *= -1;
+			d.poly[0]++;
+			bool found = false;
+			for( int p = 0; p < d1.size(); p++) {
+				if( d1[p].poly == d.poly) {
+					d1[p].c0 += d.c0;
+					found = true;
+					break;
+				}
+			}
+			if( !found ) {
+				d1.push_back(d);
+			}
+			for( int m = 0; m < N; m++) {
+				if( d0[n].poly[m]) {
+					dtype d;
+					d = d0[n];
+					d.c0 *= d.poly[m];
+					d.poly[m]--;
+					d.poly[m+1]++;
+					bool found = false;
+					for( int p = 0; p < d1.size(); p++) {
+						if( d1[p].poly == d.poly) {
+							d1[p].c0 += d.c0;
+							found = true;
+							break;
+						}
+					}
+					if( !found ) {
+						d1.push_back(d);
+					}
+				}
+			}
+		}
+		return d1;
+	};
+	std::vector<std::vector<dtype>> deriv(N);
+	std::vector<hiprec_real> dpoly(N - 1);
+	dtype d;
+	d.poly.resize(N, 0);
+	d.c0 = 1;
+	deriv[0].push_back(d);
+	for (int n = 1; n < N; n++) {
+		deriv[n] = derivative(deriv[n - 1]);
+		dpoly[n - 1] = polygamma(n - 1, x);
+	}
+	const auto evaluate = [&dpoly, x, N](const std::vector<dtype>& ds) {
+		hiprec_real sum = 0.0;
+		hiprec_real gaminv = hiprec_real(1) / gamma(hiprec_real(x));
+		for( const auto& d : ds) {
+			hiprec_real term = hiprec_real(1);
+			for( int n = 0; n < N - 1; n++) {
+				for( int m = 0; m < d.poly[n]; m++) {
+					term *= dpoly[n];
+				}
+			}
+			term *= d.c0;
+			term *= gaminv;
+			sum += term;
+		}
+		return sum;
+	};
+	for (int n = 0; n < N; n++) {
+		auto c0 = evaluate(deriv[n]);
+		c0 /= factorial(n);
+		res.push_back(c0);
+	}
+	return res;
+}
+
 double lgamma_test(double x) {
 	static bool init = false;
 	constexpr int NCHEBY = 12;
-	static constexpr int NROOTS = 29;
+	static constexpr int NROOTS = 26;
 	constexpr int Ntot = NROOTS + NCHEBY + 1;
-	constexpr int M = 40;
-	constexpr int Msin = 30;
+	constexpr int M = 21;
+	constexpr int Msin = 20;
 	static double coeffs[M][Ntot];
-	static double Xc[NCHEBY];
-	static double rootspans[NROOTS];
-	static double rootspaninv[NROOTS];
+	static double bias[Ntot];
+	static double Xc[Ntot];
 	static double factor = 10.0;
 	static double rootlocs[NROOTS];
+	static double rootbegin[NROOTS];
+	static double rootend[NROOTS];
 	static double logsincoeffs[Msin];
 	if (!init) {
 		init = true;
+		double x0 = 2.0;
+		int n = 0;
+		while (x0 > -15) {
+			double xrt = lgamma_root(x0);
+			if (n == 0) {
+				xrt = 2.0;
+			} else if (n == 1) {
+				xrt = 1.0;
+			}
+		//	printf("%.16e\n", xrt);
+			rootlocs[n] = xrt;
+			Xc[n + NCHEBY] = xrt;
+			double x1 = round(x0);
+			auto co = gammainv_coeffs(M, xrt);
+			const double eps = 0.5 * std::numeric_limits<double>::epsilon();
+			double span1 = std::min(pow(eps * fabs(co[0] / co.back()), 1.0 / (co.size() - 1)), 0.5);
+			double span2 = 0.8 * fabs(xrt - round(xrt));
+			span2 = nextafter(span2, 0.0);
+			if (n % 2 == 0) {
+				rootbegin[n] = xrt - span1;
+				rootend[n] = xrt + span2;
+			} else {
+				rootbegin[n] = xrt - span2;
+				rootend[n] = xrt + span1;
+			}
+			if (x0 == 2.0) {
+				x0 = 1.0;
+			} else if (x0 == 1.0) {
+				x0 = -2.25;
+			} else {
+				x0 -= 0.5;
+			}
+			for (int m = 0; m < M; m++) {
+				coeffs[m][n + NCHEBY] = co[m];
+			}
+			if (rootend[n] > rootbegin[n - 1]) {
+				auto avg = 0.5 * (Xc[n + NCHEBY] + Xc[n + NCHEBY - 1]);
+				rootend[n] = rootbegin[n - 1] = avg;
+			}
+	//		printf( "%e %e %e\n", rootbegin[n], xrt, rootend[n]);
+			n++;
+		}
 		std::function<hiprec_real(hiprec_real)> func = [](hiprec_real x) {
 			const auto sum = 0;
 			const auto dif = 1;
@@ -896,7 +1019,7 @@ double lgamma_test(double x) {
 		auto chebies = ChebyCoeffs(func, std::numeric_limits<double>::epsilon() * 0.5, 1);
 		chebies.resize(2 * Msin, 0.0);
 		for (int i = 0; i < 2 * Msin; i += 2) {
-			logsincoeffs[i / 2] = (double) chebies[i];
+			logsincoeffs[i / 2] = (double) (chebies[i] * pow(hiprec_real(2), hiprec_real(i)));
 		}
 		static hiprec_real A[2 * M];
 		A[0] = hiprec_real(0.5) * sqrt(hiprec_real(2));
@@ -913,102 +1036,51 @@ double lgamma_test(double x) {
 			coeffs[n][Ntot - 1] = (A[2 * n] * sqrt(hiprec_real(2)) * gamma(hiprec_real(n) + hiprec_real(0.5)) / gamma(hiprec_real(0.5)));
 		}
 		for (int n = 0; n < NCHEBY; n++) {
-			if (n == 3 || n == 4) {
-				const int M1 = 2.5 * M;
-				polynomial C(M1, 0.0);
-				C[0] = 0.0;
-				for (int m = 1; m < M1; m++) {
-					hiprec_real sum = 0.0;
-					if (m == 1) {
-						sum = 1.0;
-					} else if (m == 2) {
-						sum = 0.577215664901;
-						sum += 0.000000000000532860606512;
-						sum += 0.00000000000000000000000009008240243104215933593992L;
-					} else {
-						sum = 0.577215664901;
-						sum += 0.000000000000532860606512;
-						sum += 0.00000000000000000000000009008240243104215933593992L;
-						sum *= hiprec_real(C[m - 1]);
-						for (int k = 2; k < m; k++) {
-							sum += pow(hiprec_real(-1), hiprec_real(k + 1)) * zeta(k) * hiprec_real(C[m - k]);
-						}
-						sum /= hiprec_real(m - 1);
-					}
-					C[m] = sum;
-				}
-				Xc[n] = 0.0;
-				hiprec_real dx = hiprec_real(1);
-				polynomial D(M, 0.0);
-				for (int m = 0; m < M; m++) {
-					coeffs[m][n] = C[m];
-				}
-				n++;
-				Xc[n] = 1.0;
-				for (int k = 0; k < M; k++) {
-					hiprec_real sum = 0.0;
-					for (int n = k; n < M1; n++) {
-						sum += C[n] * factorial(n) / (factorial(k) * factorial(n - k)) * pow(dx, hiprec_real(n - k));
-					}
-					D[k] = sum;
-				}
-				for (int m = 0; m < M; m++) {
-					coeffs[m][n] = D[m];
-				}
+			hiprec_real a = -hiprec_real(3.5) + hiprec_real(n);
+			hiprec_real b = -hiprec_real(3.5) + hiprec_real(n + 1);
+			hiprec_real xc = hiprec_real(0.5) * (a + b);
+			hiprec_real span = (b - a) * hiprec_real(0.5);
+			Xc[n] = xc;
+			std::function<hiprec_real(hiprec_real)> func = [a,b](hiprec_real x) {
+				const auto sum = a + b;
+				const auto dif = b - a;
+				const auto half = hiprec_real(0.5);
+				x = half*(sum + dif * x);
+				return hiprec_real(1) / gamma(x);
+			};
+			double norm = 1;
+			auto chebies = ChebyCoeffs(func, std::numeric_limits<double>::epsilon() *  fabs(norm), 0);
+			if (chebies.size() > M && n != 3 && n != 4) {
+				printf("Chebies too big %i\n", chebies.size());
+			//	abort();
+			}
+			chebies.resize(M, 0.0);
+			for (int m = 0; m < chebies.size(); m++) {
+				coeffs[m][n] = chebies[m] * pow(span, hiprec_real(-m));
+			}
+			//		if( xc == 0.0 ) {
+			//			coeffs[0][n] = -1.0;
+			///		}
+		}
+		for (int nn = 0; nn < Ntot - 1; nn++) {
+			if (fabs(coeffs[0][nn]) < 1e-3) {
+				coeffs[0][nn] = 0.0;
+				bias[nn] = 0.0;
+			} else if (fabs(coeffs[0][nn] + 1.0) < 0.1) {
+				bias[nn] = -1.0;
+				double y = log(hiprec_real(1) / -gamma(hiprec_real(Xc[nn])));
+				y = exp(hiprec_real(y)) - hiprec_real(1);
+				coeffs[0][nn] = -y;
+			} else if (fabs(coeffs[0][nn] - 1.0) < 0.1) {
+				bias[nn] = 1.0;
+				double y = log(hiprec_real(1) / gamma(hiprec_real(Xc[nn])));
+				y = exp(hiprec_real(y)) - hiprec_real(1);
+				coeffs[0][nn] = y;
+			} else {
+				bias[nn] = 0.0;
+			}
+		}
 
-			} else {
-				hiprec_real a = -hiprec_real(3.5) + hiprec_real(n);
-				hiprec_real b = -hiprec_real(3.5) + hiprec_real(n + 1);
-				hiprec_real xc = hiprec_real(0.5) * (a + b);
-				hiprec_real span = (b - a) * hiprec_real(0.5);
-				Xc[n] = xc;
-				std::function<hiprec_real(hiprec_real)> func = [a,b](hiprec_real x) {
-					const auto sum = a + b;
-					const auto dif = b - a;
-					const auto half = hiprec_real(0.5);
-					x = half*(sum + dif * x);
-					return hiprec_real(1) / gamma(x);
-				};
-				double norm = 1e-15;
-				auto chebies = ChebyCoeffs(func, std::numeric_limits<double>::epsilon() * 0.5 * fabs(norm), 0);
-				if (chebies.size() > M) {
-					printf("Chebies too big %i\n", chebies.size());
-					abort();
-				}
-				chebies.resize(M, 0.0);
-				for (int m = 0; m < chebies.size(); m++) {
-					coeffs[m][n] = chebies[m] * pow(span, hiprec_real(-m));
-				}
-			}
-		}
-		double x0 = 2.0;
-		int n = 0;
-		while (x0 > -15.5) {
-			double xrt = lgamma_root(x0);
-			rootlocs[n] = xrt;
-			coeffs[0][n + NCHEBY] = lgamma((double) xrt);
-			double mfac = 1.0;
-			for (int m = 1; m < M; m++) {
-				mfac *= m;
-				coeffs[m][n + NCHEBY] = (double) (polygamma(m - 1, xrt) / hiprec_real(mfac) * pow(hiprec_real(factor), hiprec_real(-m)));
-				//		printf( "%i %i %e\n", n, m, (double) coeffs[m][n + NCHEBY]);
-			}
-			int m = M - 1;
-			auto a = pow(hiprec_real(std::numeric_limits<double>::epsilon()), hiprec_real(1.0 / (m)));
-			auto b = pow(pow(hiprec_real(factor), hiprec_real(-m)) / hiprec_real(fabs(coeffs[m][n + NCHEBY])), hiprec_real(1.0 / (m)));
-			rootspaninv[n] = hiprec_real(1) / a;
-			rootspaninv[n] /= b;
-			//	rootspaninv[n] = std::min(rootspaninv[n], 4.0);
-			rootspans[n] = 1.0 / rootspaninv[n];
-			if (x0 == 2.0) {
-				x0 = 1.0;
-			} else if (x0 == 1.0) {
-				x0 = -2.25;
-			} else {
-				x0 -= 0.5;
-			}
-			n++;
-		}
 	}
 	double y, z, x0;
 	int ic;
@@ -1024,33 +1096,26 @@ double lgamma_test(double x) {
 	bool asym = false;
 	bool neg = false;
 	if (ic < NROOTS) {
-		double xroot1 = rootlocs[ic];
-		double xspan1 = rootspans[ic];
-		double xroot2 = rootlocs[ic + 1];
-		double xspan2 = rootspans[ic + 1];
-		double d1 = fabs(x0 - xroot1);
-		double d2 = fabs(x0 - xroot2);
-		bool in1 = d1 < xspan1;
-		bool in2 = d2 < xspan2;
-		if (in1 && !(in2 && d2 < d1)) {
+		double xb1 = rootbegin[ic];
+		double xe1 = rootend[ic];
+		double xb2 = rootbegin[ic + 1];
+		double xe2 = rootend[ic + 1];
+		if (x > xb1 && x < xe1) {
 			nearroot = true;
-			xroot = xroot1;
-			xspan = xspan1;
+			xroot = rootlocs[ic];
 			ic = ic + NCHEBY;
-		}
-		if (in2 && !(in1 && d1 < d2)) {
+		} else if (x > xb2 && x < xe2) {
 			nearroot = true;
-			xroot = xroot2;
-			xspan = xspan2;
+			xroot = rootlocs[ic + 1];
 			ic = ic + NCHEBY + 1;
 		}
 	}
-	if (x <= -3.5 && !nearroot) {
-		x = -x;
-		neg = true;
-	}
 	if (!nearroot) {
-		if (x > 8.5) {
+		if (x <= -3.5) {
+			x = -x;
+			neg = true;
+		}
+		if (x > 7.5) {
 			asym = true;
 			ic = Ntot - 1;
 			z = 1.0 / x;
@@ -1060,29 +1125,38 @@ double lgamma_test(double x) {
 		}
 	} else {
 		z = x0 - xroot;
-		z *= factor;
-		//	printf("Near root at %e z = %e\n", xroot, z);
+	//	printf("root at %.17e  %e\n", xroot, z);
 	}
 	y = 0.0;
-	//printf("%i %e\n", ic, z);
 	for (int m = M - 1; m >= 0; m--) {
 		y = fma(y, z, coeffs[m][ic]);
 	}
 	double logx = log(x);
-	if (nearroot) {
-//		if(int(floor(x)) % 2 != 0 && x < 0.0) {
-//			y = -exp(y);
-//		} else {
-//			y = exp(y);
-//		}
+	if (asym) {
+		y = log(y);
+		y += -x + (x - 0.5) * logx + 0.5 * log(2.0 * M_PI);
 	} else {
-//		y = 1.0 / y;
-		if (asym) {
-			y = log(y);
-			y += -x + (x - 0.5) * logx + 0.5 * log(2.0 * M_PI);
+		if (bias[ic] > 0.5) {
+			if (1.0 + y < 0.0) {
+				y = -(y + 2.0);
+			}
+			{
+				y = -log1p(y);
+			}
+		} else if (bias[ic] < -0.5) {
+			if (-1.0 + y < 0.0) {
+				y = -log1p(-y);
+			} else {
+				y = -log(y - 1.0);
+			}
 		} else {
-			y = -log(fabs(y));
+			y += bias[ic];
+			y = -log(abs(y));
 		}
+
+		/* else {
+		 y = -log1p(y - 1.0);
+		 }*/
 	}
 	if (neg) {
 		double r;
@@ -1091,31 +1165,25 @@ double lgamma_test(double x) {
 			r = 1 - (x0 - floor(x0));
 		}
 		z = 0.0;
-		double x2 = 4.0 * r * r;
+		double x2 = r * r;
 		for (int m = Msin - 1; m >= 0; m--) {
 			z = fma(z, x2, logsincoeffs[m]);
 		}
 		double_2 Y(y);
-		Y = -Y;
-		Y = Y - double_2(logx);
-		Y = Y - double_2(z);
-		Y = Y - double_2(log(abs(r)));
-//		printf( "%e %e %e\n", logx, z, r);
-		y = Y.x;
+		Y = double_2::quick_two_sum(log(abs(r)), z);
+		Y = Y + double_2::two_sum(y, logx);
+		y = -Y.x;
 	}
 	return y;
 }
 
 int main() {
 	using namespace simd;
-	double s, c;
-	for (double r = -3.0; r <= 3.0; r += 0.01 * rand1()) {
-//	printf( "%e %e\n", r,(double)polygamma(2, r));
-
-	}
+//	gammainv_coeffs(20, 16.0);
 //return 0;
 	srand (time(NULL));double
-	maxe = 0.0;
+	s, c;
+	double maxe = 0.0;
 	double avge = 0.0;
 	int N = 0;
 	double eps = std::numeric_limits<double>::epsilon();
@@ -1124,16 +1192,16 @@ int main() {
 	int Na = 100;
 	int i = 0;
 	double a, b, err;
-	for (double x = -170.0 + 0.00001; x < 170; x += 0.1 * rand1()) {
-		N++;
-		a = tgammal(x);
-		b = tgamma_test(x);
-		c = x * log(x) - x + 0.5 * log(2.0 * M_PI / x);
+	for (double x = -660; x < 660; x += rand1() * 0.0001) {
+		a = lgammal(x);
+		b = lgamma_test(x);
 		err = epserr(a, b) / eps;
 		maxe = std::max(maxe, err);
 		avge += err;
-		printf("%e %e %e %e\n", x, b, a, err);
-
+		N++;
+		if( err >= 5 ) {
+			printf("%e %e %e %e\n", x, b, a, err);
+		}
 	}
 	avge /= N;
 	printf("%e %e \n", maxe, avge);

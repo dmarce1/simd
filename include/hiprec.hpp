@@ -15,17 +15,17 @@ class hiprec_real {
 	mpfr_t q;
 public:
 	hiprec_real() {
-		mpfr_init2(q, 512);
+		mpfr_init2(q, 1024);
 	}
 	~hiprec_real() {
 		mpfr_clear(q);
 	}
 	hiprec_real(const hiprec_real& other) {
-		mpfr_init2(q, 512);
+		mpfr_init2(q, 1024);
 		*this = other;
 	}
 	hiprec_real(hiprec_real&& other) {
-		mpfr_init2(q, 512);
+		mpfr_init2(q, 1024);
 		*this = std::move(other);
 	}
 	hiprec_real& operator=(const hiprec_real& other) {
@@ -37,15 +37,15 @@ public:
 		return *this;
 	}
 	hiprec_real(long double a) {
-		mpfr_init2(q, 512);
+		mpfr_init2(q, 1024);
 		mpfr_set_ld(q, a, MPFR_RNDN);
 	}
 	hiprec_real(double a) {
-		mpfr_init2(q, 512);
+		mpfr_init2(q, 1024);
 		mpfr_set_d(q, a, MPFR_RNDN);
 	}
 	hiprec_real(int a) {
-		mpfr_init2(q, 512);
+		mpfr_init2(q, 1024);
 		mpfr_set_si(q, a, MPFR_RNDN);
 	}
 	operator double() const {
@@ -129,11 +129,18 @@ public:
 	friend hiprec_real sin(hiprec_real);
 	friend hiprec_real pow(hiprec_real, hiprec_real);
 	friend hiprec_real copysign(hiprec_real, hiprec_real);
+	friend hiprec_real digamma(hiprec_real a);
 };
 
 hiprec_real pow(hiprec_real a, hiprec_real b) {
 	hiprec_real c;
 	mpfr_pow(c.q, a.q, b.q, MPFR_RNDN);
+	return c;
+}
+
+hiprec_real digamma(hiprec_real a) {
+	hiprec_real c;
+	mpfr_digamma(c.q, a.q, MPFR_RNDN);
 	return c;
 }
 
