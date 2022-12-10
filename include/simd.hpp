@@ -597,16 +597,6 @@ inline simd_f32 frexp(simd_f32 x, simd_i32* e) {
 	return y;
 }
 
-inline simd_f32 ldexp(simd_f32 x, simd_i32 e) {
-	simd_i32 i, j;
-	i = (simd_i32) x;
-	i &= simd_i32(0x807FFFFF);
-	e += simd_i32(127);
-	e <<= (long long) 23;
-	i = i | e;
-	x = (simd_f32&) i;
-	return x;
-}
 
 inline simd_f32 modf(simd_f32 x, simd_f32* i) {
 	*i = simd_f32(x);
@@ -1151,6 +1141,13 @@ inline simd_f64 ldexp(simd_f64 x, simd_i64 e) {
 	return x;
 }
 
+inline simd_f32 ldexp(simd_f32 x, simd_i32 e) {
+	e += simd_i32(127);
+	e <<= 23;
+	x *= (simd_f32&) e;
+	return x;
+}
+
 inline simd_f64 fma(simd_f64 a, simd_f64 b, simd_f64 c) {
 	simd_f64 result;
 	result.v = _mm256_fmadd_pd(a.v, b.v, c.v);
@@ -1166,6 +1163,7 @@ inline simd_i64::simd_i64(const simd_f64& other) {
 
 simd_f64 tgamma(simd_f64);
 simd_f64 lgamma(simd_f64);
+simd_f32 lgamma(simd_f32);
 
 inline simd_f64 sqrt(simd_f64 x) {
 	x.v = _mm256_sqrt_pd(x.v);

@@ -127,6 +127,17 @@ double epserr(double x0, double y0) {
 	return fabs(err);
 }
 
+float epserr(float x0, float y0) {
+	int i, j;
+	frexpf(x0, &i);
+	i--;
+	frexpf(y0, &j);
+	j--;
+	i = std::max(i, j);
+	float err = (x0 - y0) / ldexpf(1.0f, i);
+	return fabsf(err);
+}
+
 template<class T, class V, class F1, class F2>
 test_result_t test_function(const F1& ref, const F2& test, T a, T b, bool relerr) {
 	constexpr int N = 1 << 23;
@@ -904,7 +915,7 @@ double tgamma_test(double x) {
 	return y;
 }
 
-double lgamma_test(double x_) {
+simd::simd_f64 lgamma_test(simd::simd_f64 x) {
 	using namespace simd;
 	static bool init = false;
 	constexpr int NCHEBY = 12;
@@ -1011,7 +1022,7 @@ double lgamma_test(double x_) {
 				return hiprec_real(1) / gamma(x);
 			};
 			double norm = 1;
-			auto chebies = ChebyCoeffs2(func, M+1, 0);
+			auto chebies = ChebyCoeffs2(func, M + 1, 0);
 			chebies.resize(M, 0.0);
 			for (int m = 0; m < chebies.size(); m++) {
 				coeffs[m][n] = chebies[m] * pow(span, hiprec_real(-m));
@@ -1055,62 +1066,142 @@ double lgamma_test(double x_) {
 			y = fma(y, z2, simd_f64(2.0 / (1.0 + 2.0 * n)));
 		}
 		y *= z;
-		y += simd_f64(j) * simd_f64(log(2));
+		static const simd_f64 log2(log(2));
+		y += simd_f64(j) * log2;
 		return y;
 	};
-	simd_f64 x = x_;
 	simd_f64 y, z, x0, zm1, logx, r, b, c, x2;
 	simd_i64 ic, nearroot, nearroot1, nearroot2, asym, neg, yneg;
 	simd_f64_2 Y;
 	x0 = x;
-	//	ic = std::min(2 * std::max((int) floor(-x) - 1, 0), NROOTS - 2);
 	ic = simd_i64(min(simd_f64(2) * max(floor(-x - simd_f64(1)), simd_f64(0)), simd_f64(NROOTS - 2)));
-//	nearroot1 = (x > rootbegin[ic] && x < rootend[ic]);
 	nearroot1 = (x > c.gather(rootbegin, ic) && x < c.gather(rootend, ic));
 	nearroot2 = (x > c.gather(rootbegin, ic + simd_i64(1)) && x < c.gather(rootend, ic + simd_i64(1)));
 	nearroot = nearroot1 || nearroot2;
 	neg = !nearroot && (x <= simd_f64(-3.5));
-//	x = neg ? -x : x;
 	x = blend(x, -x, neg);
-//	asym = !nearroot && (x >= 7.5);
 	asym = !nearroot && (x >= simd_f64(7.5));
 	ic = blend(blend(simd_i64(round(x)) + simd_i64(3), simd_i64(Ntot - 1), asym), ic + simd_i64(NCHEBY) + nearroot2, nearroot);
-//	ic = nearroot ? (ic +  + nearroot2) : (asym ? Ntot - 1 : );
-	//z = asym ? 1.0 / x : x - Xc[ic];
 	z = blend(x - c.gather(Xc, ic), simd_f64(1) / x, asym);
 	y = c.gather(coeffs[M - 1], ic);
 	for (int m = M - 2; m >= 0; m--) {
 		y = fma(y, z, c.gather(coeffs[m], ic));
 	}
 	logx = log(x);
-	//y = asym ? 1.0 / y : y;
 	y = blend(y, simd_f64(1) / y, asym);
-//	yneg = bias[ic] + y < 0.0;
 	b.gather(bias, ic);
 	yneg = b + y < simd_f64(0);
-//z = yneg ? -y - bias[ic] : bias[ic] + y;
 	z = blend(b + y, -y - b, yneg);
-//	zm1 = yneg ? -y - (1.0 + bias[ic]) : y - (1.0 - bias[ic]);
 	zm1 = blend(y - (simd_f64(1) - b), -y - (simd_f64(1) + b), yneg);
 	y = -logxor1px(z, zm1);
-//	if (asym) {
-//		y += -x + (x - 0.5) * logx + 0.5 * log(2.0 * M_PI);
-//	}
 	y += blend(simd_f64(0), -x + (x - simd_f64(0.5)) * logx + simd_f64(0.5 * log(2.0 * M_PI)), asym);
 	r = x0 - floor(x0);
-//	r = r > 0.5 ? 1 - (x0 - floor(x0)) : r;
 	r = blend(r, simd_f64(1) - r, r > simd_f64(0.5));
 	x2 = r * r;
-//	z = 0.0;
 	z = simd_f64(logsincoeffs[Msin - 1]);
 	for (int m = Msin - 2; m >= 0; m--) {
 		z = fma(z, x2, simd_f64(logsincoeffs[m]));
 	}
 	Y = simd_f64_2::quick_two_sum(log(abs(r)), z);
 	Y = Y + simd_f64_2::two_sum(y, logx);
-	//	y = neg ? -Y.x : y;
 	y = blend(y, -Y.x, neg);
-	return y[0];
+	return y;
+}
+
+std::vector<hiprec_real> cot_derivs(int N, hiprec_real x) {
+	std::vector<hiprec_real> res(N);
+	struct term_t {
+		hiprec_real cot;
+		hiprec_real csc;
+		hiprec_real c0;
+	};
+	const auto derivative = [](const std::vector<term_t>& d0s ) {
+		std::vector<term_t> d1;
+		for( auto d0 : d0s) {
+			term_t d;
+			d = d0;
+			d.c0 *= -d.csc;
+			d.cot = d.cot + hiprec_real(1);
+			d1.push_back(d);
+			d = d0;
+			d.c0 *= -d.cot;
+			d.cot =d.cot - hiprec_real(1);
+			d.csc=d.csc + hiprec_real(2);
+			d1.push_back(d);
+		}
+		std::vector<term_t> D;
+		for( int i = 0; i < d1.size(); i++) {
+			term_t d = d1[i];
+			for( int j = i + 1; j < d1.size(); j++) {
+				if( d1[j].cot == d1[i].cot && d1[j].csc == d1[i].csc) {
+					d.c0 += d1[j].c0;
+					d1[j] = d1.back();
+					d1.pop_back();
+					j--;
+				}
+			}
+			D.push_back(d);
+		}
+		return D;
+	};
+	const auto evaluate = [](const std::vector<term_t>& D, hiprec_real x) {
+		hiprec_real sum = 0.0;
+		for( auto d : D ) {
+			hiprec_real term = 1.0;
+			hiprec_real sine = sin(x);
+			hiprec_real csc = hiprec_real(1) / sine;
+			hiprec_real cot = cos(x) * csc;
+			for( int k = 0; k < d.cot; k++) {
+				term *= cot;
+			}
+			for( int k = 0; k < d.csc; k++) {
+				term *= csc;
+			}
+			term *= d.c0;
+			sum += term;
+		}
+		return sum;
+	};
+	std::vector<std::vector<term_t>> derivs(N);
+	term_t d0;
+	d0.cot = 1.0;
+	d0.csc = 0.0;
+	d0.c0 = 1.0;
+	derivs[0].push_back(d0);
+	for (int n = 1; n < N; n++) {
+		derivs[n] = derivative(derivs[n - 1]);
+	}
+	for (int n = 0; n < N; n++) {
+		res[n] = evaluate(derivs[n], x);
+	}
+	return res;
+}
+
+std::vector<double> logsin_expansion(int N) {
+	hiprec_real x = .5;
+	int M = 4 * N;
+	auto derivs = cot_derivs(M, 0.5);
+	std::vector<hiprec_real> C(N, 0.0);
+	std::vector<hiprec_real> A(M);
+	hiprec_real pi = hiprec_real(4) * atan(hiprec_real(1));
+	A[0] = log(sin(x) / x);
+	A[1] = derivs[0] - hiprec_real(1) / x;
+	for (int n = 2; n < M; n++) {
+		A[n] = derivs[n - 1];
+		A[n] += pow(hiprec_real(-1), hiprec_real(n)) * factorial(n - 1) * pow(x, hiprec_real(-n));
+		A[n] /= factorial(n);
+	}
+	for (int n = 0; n < N; n++) {
+		C[n] = 0.0;
+		for (int k = n; k < M; k++) {
+			C[n] += A[k] * factorial(k) / factorial(n) / factorial(k - n) * pow(-x, hiprec_real(k - n));
+		}
+	}
+	std::vector<double> res;
+	for (int n = 0; n < N; n++) {
+		res.push_back(C[n]);
+	}
+	return res;
 }
 
 int main() {
@@ -1127,12 +1218,12 @@ int main() {
 	double xmax = 168.0;
 	int Na = 100;
 	int i = 0;
-	double a, b, err;
 	int maxerr = 0;
 	//while (1) {
-	for (double x = -1000.111; x < 1000; x += rand1() * 0.1) {
-		a = lgammal(x);
-		b = lgamma_test(x);
+	for (double x = -20.01; x < 20; x += rand1() * 0.01) {
+		double a, b, err;
+		a = tgammal(x);
+		b = tgamma(x);
 		err = epserr(a, b) / eps;
 		maxe = std::max(maxe, err);
 		avge += err;
@@ -1147,8 +1238,7 @@ int main() {
 //	TEST2(float, simd_f32, pow, powf, pow, 1e-3, 1e3, .01, 10, true);
 //TEST1(double, simd_f64, log2, log2, log2_precise, .0001, 100000, true);
 //	TEST1(double, simd_f64, exp, exp, exp, -600.0, 600.0, true);
-	return 0;
-	TEST1(double, simd_f64, lgamma, lgamma, lgamma, -167, 167.000, true);
+	TEST1(double, simd_f32, lgamma, lgammaf, lgamma, -167, 167.000, true);
 
 	printf("Testing SIMD Functions\n");
 	printf("\nSingle Precision\n");
