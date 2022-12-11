@@ -792,7 +792,7 @@ std::vector<double> gammainv_coeffs(int N, hiprec_real x) {
 	return res;
 }
 
-simd::simd_f64 tgamma_test(simd::simd_f64 x_) {
+float tgamma_test(float x_) {
 	using namespace simd;
 	static bool init = false;
 	constexpr int NCHEBY = 11;
@@ -800,9 +800,9 @@ simd::simd_f64 tgamma_test(simd::simd_f64 x_) {
 	constexpr int M = 19;
 	constexpr int Mstr = 14;
 	constexpr int Msin = 10;
-	static double coeffs[M][Ntot];
-	static double sincoeffs[Msin];
-	static double einvhi, einvlo;
+	static float coeffs[M][Ntot];
+	static float sincoeffs[Msin];
+	static float einvhi, einvlo;
 	if (!init) {
 		init = true;
 		einvhi = exp(-hiprec_real(1));
@@ -822,7 +822,7 @@ simd::simd_f64 tgamma_test(simd::simd_f64 x_) {
 		auto chebies = ChebyCoeffs2(func, 2 * Msin + 1, -1);
 		chebies.resize(2 * Msin, 0.0);
 		for (int i = 0; i < 2 * Msin - 1; i += 2) {
-			sincoeffs[i / 2] = (double) chebies[i + 1];
+			sincoeffs[i / 2] = (float) chebies[i + 1];
 		}
 		static hiprec_real A[2 * M];
 		A[0] = 0;
@@ -865,38 +865,40 @@ simd::simd_f64 tgamma_test(simd::simd_f64 x_) {
 			coeffs[n][Ntot - 1] = 0.0;
 		}
 	}
-	static const simd_f64_2 Einv(einvhi, einvlo);
-	simd_f64 x = x_;
-	simd_f64 y, z, x0, c, r, sgn, x2;
-	simd_i64 ic, asym, neg;
-	simd_f64_2 A;
+	float_2 Einv;
+	Einv.x = einvhi;
+	Einv.y = einvlo;
+	float x = x_;
+	float y, z, x0, c, r, sgn, x2;
+	int ic, asym, neg;
+	float_2 A;
 	x0 = x;
-	neg = (x <= simd_f64(-0.5));
-	x = blend(x, -x, neg);
-	asym = x > simd_f64(8.5);
+	neg = (x <= float(-0.5));
+	x = neg ? -x : x;
+	asym = x > float(8.5);
 	x2 = round(x);
-	ic = blend(x2, simd_f64(Ntot - 1), asym);
-	z = blend(x - x2, simd_f64(1) / x, asym);
-	y.gather(coeffs[M - 1], ic);
+	ic = asym ? float(Ntot - 1) : x2 ;
+	z = asym ? float(1) / x : x - x2;
+	y = coeffs[M - 1][ic];
 	for (int m = M - 2; m >= 0; m--) {
-		y = fma(y, z, c.gather(coeffs[m], ic));
+		y = fma(y, z, coeffs[m][ic]);
 	}
 	A = x;
 	A = A * Einv;
-	c = x - simd_f64(0.5);
+	c = x - float(0.5);
 	x2 = pow(A.x, c);
-	x2 *= (simd_f64(1) + c * A.y / A.x);
-	y = blend(simd_f64(1) / y, y * x2, asym);
+	x2 *= (float(1) + c * A.y / A.x);
+	y = asym ? y * x2 : float(1) / y;
 	r = x0 - floor(x0);
-	r = blend(r, simd_f64(1) - r, r > simd_f64(0.5));
-	sgn = blend(simd_f64(-1), simd_f64(1), simd_i64(floor(x0)) & simd_i64(1));
-	x2 = simd_f64(4) * r * r;
-	z = simd_f64(sincoeffs[Msin - 1]);
+	r = r > float(0.5) ? float(1) - r : r;
+	sgn = int(floor(x0)) & int(1) ? float(1) : float(-1);
+	x2 = float(4) * r * r;
+	z = float(sincoeffs[Msin - 1]);
 	for (int m = Msin - 2; m >= 0; m--) {
-		z = fma(z, x2, simd_f64(sincoeffs[m]));
+		z = fma(z, x2, float(sincoeffs[m]));
 	}
-	z *= simd_f64(2) * r;
-	y = blend(y, sgn / (y * z * x0), neg);
+	z *= float(2) * r;
+	y = neg ? sgn / (y * z * x0) : y;
 	return y;
 }
 
@@ -1198,34 +1200,37 @@ int main() {
 	double maxe = 0.0;
 	double avge = 0.0;
 	int N = 0;
-	double eps = std::numeric_limits<double>::epsilon();
+	double eps = std::numeric_limits<float>::epsilon();
 	double xmin = 100.00000;
 	double xmax = 168.0;
 	int Na = 100;
 	int i = 0;
 	int maxerr = 0;
 //	while (true) {
-	for (double x = 0.01; x < 2; x += rand1() * 0.001) {
-	//	double x = rand1() * 320 - 160;
-		double a, b, err;
+	for (float x = -33; x < 33; x += rand1() * 0.001) {
+		//float x = rand1() * 66 - 33;
+		float a, b, err;
 		a = tgammal(x);
-		b = tgamma(simd_f64(x))[3];
+		b = tgamma(simd_f32(x))[0];
 		err = epserr(a, b) / eps;
-		maxe = std::max(maxe, err);
+		maxe = std::max(maxe,(double) err);
 		avge += err;
 		N++;
 	//	if (err > maxerr) {
 			maxerr = err;
 			printf("%e %e %e %e \n", x, b, a, err);
-//		}
+	//	}
 	}
 	avge /= N;
-	TEST1(double, simd_f64, tgamma, tgamma, tgamma, -167, 167.000, true);
 	printf("%e %e \n", maxe, avge);
+	TEST1(float, simd_f32, tgamma, tgamma, tgamma, -33, 33.000, true);
 //	TEST2(float, simd_f32, pow, powf, pow, 1e-3, 1e3, .01, 10, true);
 //TEST1(double, simd_f64, log2, log2, log2_precise, .0001, 100000, true);
 //	TEST1(double, simd_f64, exp, exp, exp, -600.0, 600.0, true);
 //	TEST1(double, simd_f64, tgamma, tgammal, tgamma_test, 0, 2.000, true);
+
+
+//	TEST2(float, simd_f32, pow, pow, pow, .1, 10, -30, 30, true);
 
 	printf("Testing SIMD Functions\n");
 	printf("\nSingle Precision\n");
@@ -1237,7 +1242,6 @@ int main() {
 	 TEST1(float, simd_f32, acosh, acoshf, acosh, 1.001, 10.0, true);
 	 TEST1(float, simd_f32, asinh, asinhf, asinh, .001, 10, true);
 	 TEST1(float, simd_f32, atanh, atanhf, atanh, 0.001, 0.999, true);
-	 TEST2(float, simd_f32, pow, pow, pow, .1, 10, -30, 30, true);
 	 TEST1(float, simd_f32, exp, expf, exp, -86.0, 86.0, true);
 	 TEST1(float, simd_f32, exp2, exp2f, exp2, -125.0, 125.0, true);
 	 TEST1(float, simd_f32, expm1, expm1f, expm1, -2.0, 2.0, true);
