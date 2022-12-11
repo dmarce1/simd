@@ -204,7 +204,9 @@ test_result_t test_function(const F1& ref, const F2& test, T a, T b, bool relerr
 			T b = ytest[i / size][j];
 			double this_err = epserr(b, a);
 			err += this_err;
-			//printf( "%e %e %e\n", xref[i + j], a, b);
+			if (this_err / std::numeric_limits<double>::epsilon() > 3) {
+				//	printf("%e %e %e %e\n", xref[i + j], a, b, this_err / std::numeric_limits<double>::epsilon());
+			}
 			max_err = std::max((double) max_err, (double) this_err);
 		}
 	}
@@ -790,15 +792,16 @@ std::vector<double> gammainv_coeffs(int N, hiprec_real x) {
 	return res;
 }
 
-double tgamma_test(double x) {
+simd::simd_f64 tgamma_test(simd::simd_f64 x_) {
+	using namespace simd;
 	static bool init = false;
-	constexpr int NCHEBY = 8;
+	constexpr int NCHEBY = 11;
 	constexpr int Ntot = NCHEBY + 1;
-	constexpr int M = 20;
+	constexpr int M = 19;
+	constexpr int Mstr = 14;
 	constexpr int Msin = 10;
 	static double coeffs[M][Ntot];
 	static double sincoeffs[Msin];
-	static double Xc[NCHEBY];
 	static double einvhi, einvlo;
 	if (!init) {
 		init = true;
@@ -816,7 +819,7 @@ double tgamma_test(double x) {
 				return (sin(pi * x ) / (pi));
 			}
 		};
-		auto chebies = ChebyCoeffs(func, std::numeric_limits<double>::epsilon() * 0.5, -1);
+		auto chebies = ChebyCoeffs2(func, 2 * Msin + 1, -1);
 		chebies.resize(2 * Msin, 0.0);
 		for (int i = 0; i < 2 * Msin - 1; i += 2) {
 			sincoeffs[i / 2] = (double) chebies[i + 1];
@@ -838,8 +841,7 @@ double tgamma_test(double x) {
 			coeffs[n][0] = A[n];
 		}
 		for (int n = 1; n < NCHEBY; n++) {
-			auto co = gammainv_coeffs(M, n + 0.0);
-			Xc[n] = n + 0.0;
+			auto co = gammainv_coeffs(M, n);
 			for (int m = 0; m < co.size(); m++) {
 				coeffs[m][n] = co[m];
 			}
@@ -854,64 +856,47 @@ double tgamma_test(double x) {
 			sum /= A[0] * (hiprec_real(1) + hiprec_real(1) / (hiprec_real(n) + hiprec_real(1)));
 			A[n] = sum;
 		}
-		for (int n = 0; n < M; n++) {
+		for (int n = 0; n < Mstr; n++) {
 			auto pi = hiprec_real(4) * atan(hiprec_real(1));
 			auto scale = hiprec_real(2) * sqrt(pi * exp(hiprec_real(-1)));
 			coeffs[n][Ntot - 1] = (A[2 * n] * scale * gamma(hiprec_real(n) + hiprec_real(0.5)) / gamma(hiprec_real(0.5)));
 		}
+		for (int n = Mstr; n < M; n++) {
+			coeffs[n][Ntot - 1] = 0.0;
+		}
 	}
-	double_2 Einv;
-	Einv.x = einvhi;
-	Einv.y = einvlo;
-	double y, z, x0;
-	double_2 A;
-	int ic;
+	static const simd_f64_2 Einv(einvhi, einvlo);
+	simd_f64 x = x_;
+	simd_f64 y, z, x0, c, r, sgn, x2;
+	simd_i64 ic, asym, neg;
+	simd_f64_2 A;
 	x0 = x;
-	if (x > 0.0) {
-		ic = 0;
-	} else {
-		ic = 2 * std::max((int) round(-x) - 1, 0);
+	neg = (x <= simd_f64(-0.5));
+	x = blend(x, -x, neg);
+	asym = x > simd_f64(8.5);
+	x2 = round(x);
+	ic = blend(x2, simd_f64(Ntot - 1), asym);
+	z = blend(x - x2, simd_f64(1) / x, asym);
+	y.gather(coeffs[M - 1], ic);
+	for (int m = M - 2; m >= 0; m--) {
+		y = fma(y, z, c.gather(coeffs[m], ic));
 	}
-	bool asym = false;
-	bool neg = false;
-	if (x <= -0.5) {
-		x = -x;
-		neg = true;
+	A = x;
+	A = A * Einv;
+	c = x - simd_f64(0.5);
+	x2 = pow(A.x, c);
+	x2 *= (simd_f64(1) + c * A.y / A.x);
+	y = blend(simd_f64(1) / y, y * x2, asym);
+	r = x0 - floor(x0);
+	r = blend(r, simd_f64(1) - r, r > simd_f64(0.5));
+	sgn = blend(simd_f64(-1), simd_f64(1), simd_i64(floor(x0)) & simd_i64(1));
+	x2 = simd_f64(4) * r * r;
+	z = simd_f64(sincoeffs[Msin - 1]);
+	for (int m = Msin - 2; m >= 0; m--) {
+		z = fma(z, x2, simd_f64(sincoeffs[m]));
 	}
-	if (x > 7.5) {
-		asym = true;
-		ic = Ntot - 1;
-		z = 1.0 / x;
-	} else {
-		ic = round(x);
-		z = x - Xc[ic];
-	}
-	y = 0.0;
-	for (int m = M - 1; m >= 0; m--) {
-		y = fma(y, z, coeffs[m][ic]);
-	}
-	if (asym) {
-		A = x;
-		A = A * Einv;
-		y *= pow(A.x, x - 0.5) * (1.0 + (x - 0.5) * A.y / A.x);
-	} else {
-		y = 1.0 / y;
-	}
-	if (neg) {
-		double r;
-		r = x0 - floor(x0);
-		if (r > 0.5) {
-			r = 1 - (x0 - floor(x0));
-		}
-		double sgn = lround(floor(x0)) & 1 ? 1.0 : -1.0;
-		z = 0.0;
-		double x2 = 4.0 * r * r;
-		for (int m = Msin - 1; m >= 0; m--) {
-			z = fma(z, x2, sincoeffs[m]);
-		}
-		z *= 2.0 * r;
-		y = sgn / (y * z * x0);
-	}
+	z *= simd_f64(2) * r;
+	y = blend(y, sgn / (y * z * x0), neg);
 	return y;
 }
 
@@ -1219,26 +1204,28 @@ int main() {
 	int Na = 100;
 	int i = 0;
 	int maxerr = 0;
-	//while (1) {
-	for (double x = -20.01; x < 20; x += rand1() * 0.01) {
+//	while (true) {
+	for (double x = 0.01; x < 2; x += rand1() * 0.001) {
+	//	double x = rand1() * 320 - 160;
 		double a, b, err;
 		a = tgammal(x);
-		b = tgamma(x);
+		b = tgamma(simd_f64(x))[3];
 		err = epserr(a, b) / eps;
 		maxe = std::max(maxe, err);
 		avge += err;
 		N++;
-		//	if (err > maxerr) {
-		maxerr = err;
-		printf("%e %e %e %e \n", x, b, a, err);
+	//	if (err > maxerr) {
+			maxerr = err;
+			printf("%e %e %e %e \n", x, b, a, err);
 //		}
 	}
 	avge /= N;
+	TEST1(double, simd_f64, tgamma, tgamma, tgamma, -167, 167.000, true);
 	printf("%e %e \n", maxe, avge);
 //	TEST2(float, simd_f32, pow, powf, pow, 1e-3, 1e3, .01, 10, true);
 //TEST1(double, simd_f64, log2, log2, log2_precise, .0001, 100000, true);
 //	TEST1(double, simd_f64, exp, exp, exp, -600.0, 600.0, true);
-	TEST1(double, simd_f32, lgamma, lgammaf, lgamma, -167, 167.000, true);
+//	TEST1(double, simd_f64, tgamma, tgammal, tgamma_test, 0, 2.000, true);
 
 	printf("Testing SIMD Functions\n");
 	printf("\nSingle Precision\n");
@@ -1271,7 +1258,6 @@ int main() {
 	 TEST1(double, simd_f64, asin, asin, asin, -1, 1, true);
 	 TEST1(double, simd_f64, acos, acos, acos, -1 + 1e-6, 1 - 1e-6, true);
 	 TEST1(double, simd_f64, atan, atan, atan, -10.0, 10.0, true);
-	 TEST1(double, simd_f64, tgamma, tgamma, tgamma, -167, 167.000, true);
 	 TEST1(double, simd_f64, acosh, acosh, acosh, 1.001, 10.0, true);
 	 TEST1(double, simd_f64, asinh, asinh, asinh, .001, 10, true);
 	 TEST1(double, simd_f64, atanh, atanh, atanh, 0.001, 0.999, true);

@@ -433,11 +433,11 @@ void float_funcs(FILE* fp) {
 						rootend[n] = rootbegin[n - 1] = avg;
 					}
 				}
-				printf( "%i %e %e\n", n, rootbegin[n], rootend[n]);
+				printf("%i %e %e\n", n, rootbegin[n], rootend[n]);
 				n++;
 			}
-			for( int n = 0; n < NROOTS; n++) {
-				printf( "%i %e %e\n", n, rootbegin[n], rootend[n]);
+			for (int n = 0; n < NROOTS; n++) {
+				printf("%i %e %e\n", n, rootbegin[n], rootend[n]);
 			}
 			std::function<hiprec_real(hiprec_real)> func = [](hiprec_real x) {
 				const auto sum = 0;
@@ -602,147 +602,6 @@ void float_funcs(FILE* fp) {
 				"\treturn y;\n");
 		fprintf(fp, "}\n");
 	}
-	/* tgamma */
-	{
-		static bool init = false;
-		static constexpr int M = 13;
-		static constexpr int N = 2 * M;
-		static constexpr int Nsin = 7;
-		static float coeffs[Nsin];
-		static constexpr int Nsets = 11;
-		static hiprec_real coeff[M][Nsets];
-		static float coeff0[M][Nsets];
-		static float ehi, elo;
-		int xa = 7.5;
-		float xb = 2.5;
-		if (!init) {
-			init = true;
-			hiprec_real A[N];
-			A[0] = hiprec_real(0.5) * sqrt(hiprec_real(2));
-			for (int n = 1; n < N; n++) {
-				hiprec_real sum = 0.0;
-				for (int k = 1; k < n; k++) {
-					sum += A[k] * A[n - k] / hiprec_real(k + 1);
-				}
-				sum = 1.0 / n * A[n - 1] - sum;
-				sum /= A[0] * (hiprec_real(1) + hiprec_real(1) / (hiprec_real(n) + hiprec_real(1)));
-				A[n] = sum;
-			}
-			for (int n = 0; n < M; n++) {
-				coeff[n][10] = (A[2 * n] * sqrt(hiprec_real(2)) * gamma(hiprec_real(n) + hiprec_real(0.5)) / gamma(hiprec_real(0.5)));
-			}
-
-			for (int n = 0; n < Nsin; n++) {
-				const hiprec_real pi = hiprec_real(4) * atan(hiprec_real(1));
-				coeffs[n] = pow(hiprec_real(pi), hiprec_real(2 * n + 1)) * pow(hiprec_real(-1), hiprec_real(n)) / factorial(2 * n + 1) / pi;
-			}
-			for (int n = 0; n < 6; n++) {
-				hiprec_real a = hiprec_real(5) / hiprec_real(4) * (hiprec_real(n + 2));
-				hiprec_real b = hiprec_real(5) / hiprec_real(4) * (hiprec_real(n + 3));
-				std::function<hiprec_real(hiprec_real)> func = [a,b](hiprec_real x) {
-					const auto sum = a + b;
-					const auto dif = b - a;
-					const auto half = hiprec_real(0.5);
-					x = half*(sum + dif * x);
-					return gamma(x)*exp(x)*pow(x,-x)*sqrt(x / hiprec_real(8) / atan(hiprec_real(1)));
-				};
-				auto chebies = ChebyCoeffs(func, std::numeric_limits<float>::epsilon() * 0.005, 0);
-				chebies.resize(M, 0.0);
-				for (int m = 0; m < M; m++) {
-					coeff[m][4 + n] = chebies[m];
-				}
-			}
-			ehi = exp(hiprec_real(-1));
-			elo = exp(hiprec_real(-1)) - hiprec_real(ehi);
-			coeff[0][0] = 0.0;
-			coeff[0][1] = logl(tgammal(1.5L));
-			coeff[0][2] = 0.0;
-			coeff[0][3] = logl(tgammal(2.5L));
-			coeff[1][0] = -.57721566490153286060651209008240243104215933593992L;
-			coeff[1][2] = -.57721566490153286060651209008240243104215933593992L + 1.0L;
-			double_2 sum = -.57721566490153286060651209008240243104215933593992L - 2.0L / 3.0L;
-			coeff[1][1] = 0.0364899739785765205590237L;
-			coeff[1][3] = 0.7031566406452431872256903336679110677L;
-			for (int n = 2; n < M; n++) {
-				long double z = zeta(n);
-				hiprec_real sgn = n % 2 == 1 ? -hiprec_real(1) : hiprec_real(1);
-				hiprec_real invn = hiprec_real(1) / hiprec_real(n);
-				hiprec_real zon = hiprec_real(z) / hiprec_real(n);
-				coeff[n][0] = sgn * zon;
-				coeff[n][1] = sgn * zon * hiprec_real((1 << n) - 1);
-				coeff[n][1] -= sgn * pow(hiprec_real(0.5), hiprec_real(-n)) * invn;
-				coeff[n][2] = coeff[n][0] - hiprec_real(sgn / hiprec_real(n));
-				coeff[n][3] = coeff[n][1] - sgn * pow(hiprec_real(3) / hiprec_real(2), hiprec_real(-n)) * invn;
-			}
-			for (int m = 0; m < M; m++) {
-				for (int n = 0; n < Nsets; n++) {
-					coeff0[m][n] = coeff[m][n];
-				}
-			}
-		}
-		fprintf(fp, "\nsimd_f32 tgamma(simd_f32 x) {\n");
-		fprintf(fp, "\tstatic const simd_f32_2 E(%.9e, %.9e);\n", ehi, elo);
-		fprintf(fp, "\tstatic constexpr float coeffs[][%i] = { \n", Nsets);
-		for (int m = 0; m < M; m++) {
-			fprintf(fp, "\t\t{ ");
-			for (int n = 0; n < Nsets; n++) {
-				fprintf(fp, "%15.9e%s ", coeff0[m][n], n == Nsets - 1 ? "" : ",");
-			}
-			fprintf(fp, " }%s\n", m == M - 1 ? "" : ",");
-		}
-		fprintf(fp, "\t};\n");
-		fprintf(fp, "\tsimd_f32 y, z, x0, x1, nf, x2, c, xc, a, b, sgn;\n"
-				"\tsimd_i32 neg, inv, ni, xoa, xob, flag;\n"
-				"\tneg = x < simd_f32(0);\n"
-				"\tx0 = x + simd_f32(1);\n"
-				"\tx0 = blend(abs(x), x0, x >= simd_f32(-1));\n"
-				"\tx0 = blend(x, x0, neg);\n"
-				"\tinv = x0 < simd_f32(1);\n"
-				"\tx0 = blend(x0, x0 + simd_f32(1), inv);\n"
-				"\tx1 = round(simd_f32(2) * x0) * simd_f32(0.5);\n"
-				"\txoa = x0 > simd_f32(10.0);\n"
-				"\txob = x0 > simd_f32(2.5);\n"
-				"\tnf = round(simd_f32(2) * x1 - simd_f32(2));\n"
-				"\tnf = blend(nf, floor(x0 * simd_f32(0.8)) + simd_i32(2), xob);\n"
-				"\tnf = blend(nf, simd_f32(10), xoa);\n"
-				"\txc = simd_f32(1.25) * (simd_f32(nf) - simd_f32(1.5));\n"
-				"\tz = x0 - x1;\n"
-				"\tz = blend(z, simd_f32(1.6) * (x0 - xc), xob);\n"
-				"\tz = blend(z, simd_f32(1) / x0, xoa);\n"
-				"\tni = simd_i32(round(nf));\n"
-				"");
-		fprintf(fp, "\ty = c.gather(coeffs[%i], ni);\n", M - 1);
-		for (int k = M - 1; k >= 0; k--) {
-			fprintf(fp, "\ty = fma(y, z, c.gather(coeffs[%i], ni));\n", k);
-		}
-		fprintf(fp, "\tflag = ni >= simd_i32(4);\n"
-				"\ta = exp(y);\n"
-				"\tsimd_f32_2 A = simd_f32_2(x0) * E;\n"
-				"\tb = pow(A.x, x0) * (simd_f32(1) + x0 * A.y / A.x);\n"
-				"\tb = y * b * sqrt(simd_f32(2.0 * M_PI) / x0);\n"
-				"\ty = blend(a, b, flag);\n"
-				"\ty = blend(y, y / abs(x), inv);\n"
-				"\tx2 = x - floor(x);\n"
-				"\tx0 = blend(x2, simd_f32(1) - (x - floor(x)), x2 > simd_f32(0.5));\n"
-				"\tsgn = simd_f32(1);\n"
-				"\tnf = abs(floor(abs(x) * simd_f32(2)) * simd_f32(0.5));\n"
-				"\tni = simd_i32(nf);\n"
-				"\tsgn = blend(sgn, -sgn, (ni & simd_i32(1)) != simd_i32(0));\n"
-				"\tx2 = x0 * x0;\n"
-				"");
-		fprintf(fp, "\tz = simd_f32(%.9e);\n", coeffs[Nsin - 1]);
-		for (int k = Nsin - 1; k >= 0; k--) {
-			fprintf(fp, "\tz = fma(z, x2, simd_f32(%.9e));\n", coeffs[k]);
-		}
-		fprintf(fp, "\tz *= x0 * sgn;\n");
-		fprintf(fp, "\tz = simd_f32(1) / (x * y * z);\n");
-		fprintf(fp, "\tz = blend(z, y / -(simd_f32(x) + simd_f32(1)), inv);\n");
-		fprintf(fp, "\ty = blend(y, z, neg);\n");
-		fprintf(fp, "\treturn y;\n");
-		fprintf(fp, "}\n");
-
-	}
-
 	/* asin */
 	{
 		static std::vector<hiprec_real> co1;
@@ -1207,6 +1066,125 @@ void double_funcs(FILE* fp) {
 		fprintf(fp, "\treturn s * y;\n");
 		fprintf(fp, "}\n");
 	}
+	/* tgamma */
+	{
+		static bool init = false;
+		constexpr int NCHEBY = 11;
+		constexpr int Ntot = NCHEBY + 1;
+		constexpr int M = 19;
+		constexpr int Mstr = 14;
+		constexpr int Msin = 10;
+		static double coeffs[M][Ntot];
+		static double sincoeffs[Msin];
+		static double einvhi, einvlo;
+		if (!init) {
+			init = true;
+			einvhi = exp(-hiprec_real(1));
+			einvlo = exp(-hiprec_real(1)) - hiprec_real(einvhi);
+			std::function<hiprec_real(hiprec_real)> func = [](hiprec_real x) {
+				const auto sum = 0;
+				const auto dif = 1;
+				const auto half = hiprec_real(0.5);
+				static const hiprec_real pi = hiprec_real(4) * atan(hiprec_real(1));
+				x = half*x;
+				if( x == hiprec_real(0.0)) {
+					return hiprec_real(0);
+				} else {
+					return (sin(pi * x ) / (pi));
+				}
+			};
+			auto chebies = ChebyCoeffs2(func, 2 * Msin + 1, -1);
+			chebies.resize(2 * Msin, 0.0);
+			for (int i = 0; i < 2 * Msin - 1; i += 2) {
+				sincoeffs[i / 2] = (double) chebies[i + 1];
+			}
+			static hiprec_real A[2 * M];
+			A[0] = 0;
+			A[1] = hiprec_real(1);
+			A[2] = -digamma(hiprec_real(1));
+			for (int k = 3; k < M; k++) {
+				hiprec_real sum = -digamma(hiprec_real(1)) * A[k - 1];
+				for (int n = 2; n < k; n++) {
+					auto sgn = pow(hiprec_real(-1), hiprec_real(n + 1));
+					sum += sgn * zeta(n) * A[k - n];
+				}
+				sum /= hiprec_real(k - 1);
+				A[k] = sum;
+			}
+			for (int n = 0; n < M; n++) {
+				coeffs[n][0] = A[n];
+			}
+			for (int n = 1; n < NCHEBY; n++) {
+				auto co = gammainv_coeffs(M, n);
+				for (int m = 0; m < co.size(); m++) {
+					coeffs[m][n] = co[m];
+				}
+			}
+			A[0] = hiprec_real(0.5) * sqrt(hiprec_real(2));
+			for (int n = 1; n < 2 * M; n++) {
+				hiprec_real sum = 0.0;
+				for (int k = 1; k < n; k++) {
+					sum += A[k] * A[n - k] / hiprec_real(k + 1);
+				}
+				sum = 1.0 / n * A[n - 1] - sum;
+				sum /= A[0] * (hiprec_real(1) + hiprec_real(1) / (hiprec_real(n) + hiprec_real(1)));
+				A[n] = sum;
+			}
+			for (int n = 0; n < Mstr; n++) {
+				auto pi = hiprec_real(4) * atan(hiprec_real(1));
+				auto scale = hiprec_real(2) * sqrt(pi * exp(hiprec_real(-1)));
+				coeffs[n][Ntot - 1] = (A[2 * n] * scale * gamma(hiprec_real(n) + hiprec_real(0.5)) / gamma(hiprec_real(0.5)));
+			}
+			for (int n = Mstr; n < M; n++) {
+				coeffs[n][Ntot - 1] = 0.0;
+			}
+		}
+		fprintf(fp, "\tsimd_f64 tgamma(simd_f64 x) {\n");
+		fprintf(fp, "\tstatic const simd_f64_2 Einv(%.17e, %.17e);\n", einvhi, einvlo);
+		fprintf(fp, "\tstatic constexpr double coeffs[][%i] = {\n", Ntot);
+		for (int m = 0; m < M; m++) {
+			fprintf(fp, "\t\t{");
+			for (int n = 0; n < Ntot; n++) {
+				fprintf(fp, "%25.17e%s", coeffs[m][n], n != Ntot - 1 ? ", " : "");
+			}
+			fprintf(fp, "}%s\n", m != M - 1 ? "," : "");
+		}
+		fprintf(fp, "\t};\n");
+		fprintf(fp, "\tsimd_f64 y, z, x0, c, r, sgn, x2;\n"
+				"\tsimd_i64 ic, asym, neg;\n"
+				"\tsimd_f64_2 A;\n"
+				"\tx0 = x;\n"
+				"\tneg = (x <= simd_f64(-0.5));\n"
+				"\tx = blend(x, -x, neg);\n"
+				"\tasym = x > simd_f64(8.5);\n"
+				"\tx2 = round(x);\n"
+				"\tic = blend(x2, simd_f64(%i), asym);\n", Ntot - 1);
+		fprintf(fp, "\tz = blend(x - x2, simd_f64(1) / x, asym);\n"
+				"");
+		fprintf(fp, "\ty.gather(coeffs[%i], ic);\n", M - 1);
+		for (int m = M - 2; m >= 0; m--) {
+			fprintf(fp, "\ty = fma(y, z, c.gather(coeffs[%i], ic));\n", m);
+		}
+		fprintf(fp, "\t\tA = x;\n"
+				"\t\tA = A * Einv;\n"
+				"\t\tc = x - simd_f64(0.5);\n"
+				"\t\tx2 = pow(A.x, c);\n"
+				"\t\tx2 *= (simd_f64(1) + c * A.y / A.x);\n"
+				"\t\ty = blend(simd_f64(1) / y, y * x2, asym);\n"
+				"\t\tr = x0 - floor(x0);\n"
+				"\t\tr = blend(r, simd_f64(1) - r, r > simd_f64(0.5));\n"
+				"\t\tsgn = blend(simd_f64(-1), simd_f64(1), simd_i64(floor(x0)) & simd_i64(1));\n"
+				"\t\tx2 = simd_f64(4) * r * r;\n");
+		fprintf(fp, "\tz = simd_f64(%.17e);\n", sincoeffs[Msin - 1]);
+		for (int m = Msin - 2; m >= 0; m--) {
+			fprintf(fp, "\tz = fma(z, x2, simd_f64(%.17e));\n", sincoeffs[m]);
+		}
+		fprintf(fp, "\tz *= simd_f64(2) * r;"
+				"\ty = blend(y, sgn / (y * z * x0), neg);"
+				"\treturn y;"
+				"}");
+
+	}
 
 	/* lgamma */
 	{
@@ -1275,11 +1253,11 @@ void double_funcs(FILE* fp) {
 						rootend[n] = rootbegin[n - 1] = avg;
 					}
 				}
-				printf( "%i %e %e\n", n, rootbegin[n], rootend[n]);
+				printf("%i %e %e\n", n, rootbegin[n], rootend[n]);
 				n++;
 			}
-			for( int n = 0; n < NROOTS; n++) {
-				printf( "%i %e %e\n", n, rootbegin[n], rootend[n]);
+			for (int n = 0; n < NROOTS; n++) {
+				printf("%i %e %e\n", n, rootbegin[n], rootend[n]);
 			}
 			std::function<hiprec_real(hiprec_real)> func = [](hiprec_real x) {
 				const auto sum = 0;
@@ -1443,12 +1421,6 @@ void double_funcs(FILE* fp) {
 				"\ty = blend(y, -Y.x, neg);\n"
 				"\treturn y;\n");
 		fprintf(fp, "}\n");
-	}
-	/* tgamma */
-	{
-		fprintf(fp, "\nsimd_f64 tgamma(simd_f64 x) {\n");
-		fprintf(fp, "}\n");
-
 	}
 	/* asin */
 	{
