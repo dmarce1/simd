@@ -3,9 +3,8 @@
 #include <immintrin.h>
 #include <limits>
 #include <mutex>
+#include <cfenv>
 #include <cmath>
-
-#pragma once
 
 #ifdef NDEBUG
 #define CHECK_ALIGNMENT(ptr, sz)
@@ -263,6 +262,7 @@ public:
 	}
 	friend simd_i32 max(simd_i32, simd_i32);
 	friend simd_i32 min(simd_i32, simd_i32);
+	friend simd_i32 lround(simd_f32);
 	friend simd_f32 blend(simd_f32, simd_f32, simd_i32);
 	friend simd_f32;
 };
@@ -434,15 +434,18 @@ public:
 			v[i] = std::numeric_limits<float>::signaling_NaN();
 		}
 	}
+	friend simd_f32 rint(simd_f32 x);
 	friend simd_f32 sqrt(simd_f32);
 	friend simd_f32 rsqrt(simd_f32);
 	friend simd_f32 fma(simd_f32, simd_f32, simd_f32);
 	friend float reduce_sum(simd_f32);
+	friend simd_f32 trunc(simd_f32);
 	friend simd_f32 round(simd_f32);
+	friend simd_i32 lround(simd_f32);
 	friend simd_f32 floor(simd_f32);
 	friend simd_f32 ceil(simd_f32);
-	friend simd_f32 max(simd_f32, simd_f32);
-	friend simd_f32 min(simd_f32, simd_f32);
+	friend simd_f32 fmax(simd_f32, simd_f32);
+	friend simd_f32 fmin(simd_f32, simd_f32);
 	friend simd_f32 blend(simd_f32, simd_f32, simd_i32);
 	friend simd_f32 frexp(simd_f32, simd_i32*);
 	friend class simd_f32_2;
@@ -467,6 +470,32 @@ simd_f32 pow(simd_f32 y, simd_f32 x);
 simd_f32 atan(simd_f32);
 simd_f32 asin(simd_f32);
 simd_f32 acos(simd_f32 x);
+
+inline simd_f32 nextafter(simd_f32 x, simd_f32 y) {
+   simd_i32 ex, ey;
+	simd_f32 z;
+   simd_i32 dir = y - x > simd_f32(0);
+   simd_i32 i = (simd_i32&) x;
+   i += dir;
+   return (simd_f32&) i;
+}
+
+inline simd_f32 remainder(simd_f32 n, simd_f32 d) {
+	const auto z = n / d;
+	return n - d * round(z);
+}
+
+inline simd_f32 fmod(simd_f32 n, simd_f32 d) {
+	const auto z = n / d;
+	return n - d * trunc(z);
+}
+
+inline simd_f32 remquo(simd_f32 n, simd_f32 d, simd_i32* q) {
+	const auto z = n / d;
+	const auto qr = round(z);
+   *q = lround(qr);
+	return n - d * qr;
+}
 
 inline simd_f32 fabs(simd_f32 x) {
 	simd_i32 i = (((simd_i32&) x) & simd_i32(0x7FFFFFFF));
@@ -506,12 +535,12 @@ inline simd_f32 asinh(simd_f32 x) {
 
 }
 
-inline simd_f32 max(simd_f32 a, simd_f32 b) {
+inline simd_f32 fmax(simd_f32 a, simd_f32 b) {
 	a.v = _mm256_max_ps(a.v, b.v);
 	return a;
 }
 
-inline simd_f32 min(simd_f32 a, simd_f32 b) {
+inline simd_f32 fmin(simd_f32 a, simd_f32 b) {
 	a.v = _mm256_min_ps(a.v, b.v);
 	return a;
 }
@@ -531,6 +560,12 @@ inline simd_f32 round(simd_f32 x) {
 	return result;
 }
 
+inline simd_i32 lround(simd_f32 x) {
+	simd_i32 result;
+	result.v = _mm256_cvtps_epi32(_mm256_round_ps(x.v, _MM_FROUND_TO_NEAREST_INT));
+	return result;
+}
+
 inline simd_f32 floor(simd_f32 x) {
 	simd_f32 result;
 	result.v = _mm256_floor_ps(x.v);
@@ -541,6 +576,10 @@ inline simd_f32 ceil(simd_f32 x) {
 	simd_f32 result;
 	result.v = _mm256_ceil_ps(x.v);
 	return result;
+}
+
+inline simd_f32 fdim(simd_f32 x, simd_f32 y) {
+	return (x > y) * (x - y);
 }
 
 inline float reduce_sum(simd_f32 x) {
@@ -597,7 +636,6 @@ inline simd_f32 frexp(simd_f32 x, simd_i32* e) {
 	return y;
 }
 
-
 inline simd_f32 modf(simd_f32 x, simd_f32* i) {
 	*i = simd_f32(x);
 	x -= *i;
@@ -606,6 +644,75 @@ inline simd_f32 modf(simd_f32 x, simd_f32* i) {
 
 inline simd_f32 tan(simd_f32 x) {
 	return sin(x) / cos(x);
+}
+
+inline simd_i32 ilogb(simd_f32 x) {
+	simd_i32 i = (simd_i32&) x;
+	i >>= 23;
+	i -= 127;
+	return i;
+}
+
+inline simd_f32 logb(simd_f32 x) {
+	return log2(x);
+}
+
+inline simd_f32 ldexp(simd_f32 x, simd_i32 e) {
+	e += simd_i32(127);
+	e <<= 23;
+	x *= (simd_f32&) e;
+	return x;
+}
+
+inline simd_f32 hypot(simd_f32 x, simd_f32 y) {
+	simd_i32 ix = (simd_i32&) x;
+	simd_i32 iy = (simd_i32&) y;
+	ix >>= 23;
+	iy >>= 23;
+	simd_i32 i = (ix + iy) >> 1;
+	simd_i32 j = simd_i32(254) - i;
+	i <<= 23;
+	j <<= 23;
+	const simd_f32 a = (simd_f32&) i;
+	const simd_f32 b = (simd_f32&) j;
+	x *= b;
+	y *= b;
+	return a * sqrt(x * x + y * y);
+}
+
+inline simd_f32 trunc(simd_f32 x) {
+	x.v = _mm256_round_ps(x.v, _MM_FROUND_TO_ZERO);
+	return x;
+}
+
+inline simd_f32 scalbn(simd_f32 x, simd_i32 n) {
+	simd_i32 i = (simd_i32&) x;
+	simd_i32 j = (simd_i32&) x;
+	simd_f32 y;
+	i >>= 23;
+	i &= 0xFF;
+	i += n;
+	i <<= 23;
+	j = j & 0x807FFFFF;
+	j |= i;
+	return (simd_f32&) j;
+}
+
+inline simd_f32 rint(simd_f32 x) {
+	switch (fegetround()) {
+	case FE_DOWNWARD:
+		return floor(x);
+	case FE_TONEAREST:
+		return round(x);
+	case FE_TOWARDZERO:
+		return trunc(x);
+	case FE_UPWARD:
+		return ceil(x);
+	}
+}
+
+inline simd_f32 nearbyint(simd_f32 x) {
+	return rint(x);
 }
 
 class simd_i64;
@@ -833,20 +940,10 @@ public:
 		}
 	}
 	friend simd_f64 blend(simd_f64, simd_f64, simd_i64);
-	friend simd_i64 max(simd_i64, simd_i64);
-	friend simd_i64 min(simd_i64, simd_i64);
+	friend simd_i64 lround(simd_f64);
 	friend simd_f64;
 };
 
-inline simd_i64 max(simd_i64 a, simd_i64 b) {
-	a.v = _mm256_max_epi64(a.v, b.v);
-	return a;
-}
-
-inline simd_i64 min(simd_i64 a, simd_i64 b) {
-	a.v = _mm256_min_epi64(a.v, b.v);
-	return a;
-}
 
 class simd_f64 {
 	__m256d v;
@@ -1010,15 +1107,18 @@ public:
 			v[i] = std::numeric_limits<double>::signaling_NaN();
 		}
 	}
+	friend simd_f64 rint(simd_f64 x);
 	friend simd_f64 sqrt(simd_f64);
 	friend simd_f64 rsqrt(simd_f64);
 	friend simd_f64 fma(simd_f64, simd_f64, simd_f64);
 	friend double reduce_sum(simd_f64);
+	friend simd_f64 trunc(simd_f64);
 	friend simd_f64 round(simd_f64);
+	friend simd_i64 lround(simd_f64);
 	friend simd_f64 floor(simd_f64);
 	friend simd_f64 ceil(simd_f64);
-	friend simd_f64 max(simd_f64, simd_f64);
-	friend simd_f64 min(simd_f64, simd_f64);
+	friend simd_f64 fmax(simd_f64, simd_f64);
+	friend simd_f64 fmin(simd_f64, simd_f64);
 	friend simd_f64 blend(simd_f64, simd_f64, simd_i64);
 	friend simd_f64 asin(simd_f64 x);
 	friend class simd_i64;
@@ -1038,6 +1138,22 @@ simd_f64 erfc(simd_f64);
 simd_f64 erf(simd_f64);
 simd_f64 cbrt(simd_f64);
 simd_f64 log1p(simd_f64);
+
+inline simd_f64 hypot(simd_f64 x, simd_f64 y) {
+	simd_i64 ix = (simd_i64&) x;
+	simd_i64 iy = (simd_i64&) y;
+	ix >>= 52;
+	iy >>= 52;
+	simd_i64 i = (ix + iy) >> 1;
+	simd_i64 j = simd_i64(2026) - i;
+	i <<= 52;
+	j <<= 52;
+	const simd_f64 a = (simd_f64&) i;
+	const simd_f64 b = (simd_f64&) j;
+	x *= b;
+	y *= b;
+	return a * sqrt(x * x + y * y);
+}
 
 inline simd_f64 fabs(simd_f64 x) {
 	simd_i64 i = (((simd_i64&) x) & simd_i64(0x7FFFFFFFFFFFFFFFLL));
@@ -1090,12 +1206,12 @@ inline simd_f64 atan2(simd_f64 y, simd_f64 x) {
 	return atan(y / x) + copysign(copysign(M_PI_2, x) - simd_f64(M_PI_2), y);
 }
 
-inline simd_f64 max(simd_f64 a, simd_f64 b) {
+inline simd_f64 fmax(simd_f64 a, simd_f64 b) {
 	a.v = _mm256_max_pd(a.v, b.v);
 	return a;
 }
 
-inline simd_f64 min(simd_f64 a, simd_f64 b) {
+inline simd_f64 fmin(simd_f64 a, simd_f64 b) {
 	a.v = _mm256_min_pd(a.v, b.v);
 	return a;
 }
@@ -1104,6 +1220,18 @@ inline simd_f64 round(simd_f64 x) {
 	simd_f64 result;
 	result.v = _mm256_round_pd(x.v, _MM_FROUND_TO_NEAREST_INT);
 	return result;
+}
+
+
+inline simd_i64 lround(simd_f64 x) {
+	simd_i64 result;
+	result.v = _mm256_cvtpd_epi64(_mm256_round_pd(x.v, _MM_FROUND_TO_NEAREST_INT));
+	return result;
+}
+
+inline simd_f64 trunc(simd_f64 x) {
+	x.v = _mm256_round_pd(x.v, _MM_FROUND_TO_ZERO);
+	return x;
 }
 
 inline simd_f64 floor(simd_f64 x) {
@@ -1138,13 +1266,6 @@ inline simd_f64 ldexp(simd_f64 x, simd_i64 e) {
 	e += simd_i64(1023);
 	e <<= (long long) 52;
 	x *= (simd_f64&) e;
-	return x;
-}
-
-inline simd_f32 ldexp(simd_f32 x, simd_i32 e) {
-	e += simd_i32(127);
-	e <<= 23;
-	x *= (simd_f32&) e;
 	return x;
 }
 
@@ -1197,6 +1318,47 @@ inline simd_f64 modf(simd_f64 x, simd_f64* i) {
 	*i = simd_f64(x);
 	x -= *i;
 	return x;
+}
+
+inline simd_i64 ilogb(simd_f64 x) {
+	simd_i64 i = (simd_i64&) x;
+	i >>= 52;
+	i -= 1023;
+	return i;
+}
+
+inline simd_f64 logb(simd_f64 x) {
+	return log2(x);
+}
+
+inline simd_f64 scalbn(simd_f64 x, simd_i64 n) {
+	simd_i64 i = (simd_i64&) x;
+	simd_i64 j = (simd_i64&) x;
+	simd_f64 y;
+	i >>= 52;
+	i &= 0xFFFFFFFFFFFFFLL;
+	i += n;
+	i <<= 52;
+	j = j & 0x800FFFFFFFFFFFFFLL;
+	j |= i;
+	return (simd_f64&) j;
+}
+
+inline simd_f64 rint(simd_f64 x) {
+	switch (fegetround()) {
+	case FE_DOWNWARD:
+		return floor(x);
+	case FE_TONEAREST:
+		return round(x);
+	case FE_TOWARDZERO:
+		return trunc(x);
+	case FE_UPWARD:
+		return ceil(x);
+	}
+}
+
+inline simd_f64 nearbyint(simd_f64 x) {
+	return rint(x);
 }
 
 struct simd_f32_2 {
@@ -1463,6 +1625,23 @@ inline simd_f64_2 sqrt(simd_f64_2 X) {
 	return Y;
 }
 
+inline simd_f64 remainder(simd_f64 n, simd_f64 d) {
+	const auto z = n / d;
+	return n - d * round(z);
+}
+
+inline simd_f64 remquo(simd_f64 n, simd_f64 d, simd_i64* q) {
+	const auto z = n / d;
+	const auto qr = round(z);
+   *q = lround(qr);
+	return n - d * qr;
+}
+
+inline simd_f64 fmod(simd_f64 n, simd_f64 d) {
+	const auto z = n;
+	return n - d * trunc(z);
+}
+
 inline simd_f32 acosh(simd_f32 x) {
 	const auto Z = sqrt(simd_f32_2::two_product(x, x) - simd_f32(1));
 	const auto P = simd_f32_2::two_sum(x, simd_f32(-1));
@@ -1485,6 +1664,19 @@ inline simd_f64 acosh(simd_f64 x) {
 	Q = simd_f64_2::quick_two_sum(Q.x, Q.y);
 	Q.y += W.y;
 	return log1p(Q.x + Q.y);
+}
+
+inline simd_f64 nextafter(simd_f64 x, simd_f64 y) {
+   simd_i64 ex, ey;
+	simd_f64 z;
+   simd_i64 dir = y - x > simd_f64(0);
+   simd_i64 i = (simd_i64&) x;
+   i += dir;
+   return (simd_f64&) i;
+}
+
+inline simd_f64 fdim(simd_f64 x, simd_f64 y) {
+	return (x > y) * (x - y);
 }
 
 inline double reduce_sum(simd_f64 x) {

@@ -350,7 +350,7 @@ void float_funcs(FILE* fp) {
 		fprintf(fp, "\tx2 = x * x;\n");
 		fprintf(fp, "\tl = x < simd_f32(0.15);\n");
 		fprintf(fp, "\tz = simd_f32(1) - simd_f32(l);\n");
-		fprintf(fp, "\tx = min(x, simd_f32(%.9e));\n", (double) xmax - 0.00001);
+		fprintf(fp, "\tx = fmin(x, simd_f32(%.9e));\n", (double) xmax - 0.00001);
 		fprintf(fp, "\ti0 = x * simd_f32(%.9e);\n", (double) (hiprec_real(M) / xmax));
 		fprintf(fp, "\ti0 += simd_i32(1);\n");
 		fprintf(fp, "\ti0 -= l;\n");
@@ -688,7 +688,7 @@ void float_funcs(FILE* fp) {
 				"\tsimd_i32 ic, nearroot, nearroot1, nearroot2, asym, neg, yneg;\n"
 				"\tsimd_f32_2 Y;\n"
 				"\tx0 = x;\n"
-				"\tic = simd_i32(min(simd_f32(2) * max(floor(-x - simd_f32(1)), simd_f32(0)), simd_f32(%i)));\n", NROOTS - 2);
+				"\tic = simd_i32(fmin(simd_f32(2) * fmax(floor(-x - simd_f32(1)), simd_f32(0)), simd_f32(%i)));\n", NROOTS - 2);
 		fprintf(fp, "\tnearroot1 = (x > c.gather(rootbegin, ic) && x < c.gather(rootend, ic));\n"
 				"\tnearroot2 = (x > c.gather(rootbegin, ic + simd_i32(1)) && x < c.gather(rootend, ic + simd_i32(1)));\n"
 				"\tnearroot = nearroot1 || nearroot2;\n"
@@ -938,7 +938,7 @@ void float_funcs(FILE* fp) {
 		fprintf(fp, "simd_f32 exp(simd_f32 x) {\n");
 		fprintf(fp, "\tsimd_f32 x0, y, zero;\n");
 		fprintf(fp, "\tsimd_i32 i;\n");
-		fprintf(fp, "\tx = max(simd_f32(-87), min(simd_f32(87), x));\n");
+		fprintf(fp, "\tx = fmax(simd_f32(-87), fmin(simd_f32(87), x));\n");
 		fprintf(fp, "\tx0 = round(x * simd_f32(%.9e));\n", 1.0 / M_LN2);
 		fprintf(fp, "\tx -= x0 * simd_f32(%.9e);\n", M_LN2);
 		fprintf(fp, "\ty = simd_f32(%.9e);\n", c0[N - 1]);
@@ -969,7 +969,7 @@ void float_funcs(FILE* fp) {
 		fprintf(fp, "simd_f32 exp2(simd_f32 x) {\n");
 		fprintf(fp, "\tsimd_f32 x0, y, zero;\n");
 		fprintf(fp, "\tsimd_i32 i;\n");
-		fprintf(fp, "\tx = max(simd_f32(-127), min(simd_f32(127), x));\n");
+		fprintf(fp, "\tx = fmax(simd_f32(-127), fmin(simd_f32(127), x));\n");
 		fprintf(fp, "\tx0 = round(x);\n");
 		fprintf(fp, "\tx -= x0;\n");
 		fprintf(fp, "\ty = simd_f32(%.9e);\n", c0[N - 1]);
@@ -1036,9 +1036,9 @@ void float_funcs(FILE* fp) {
 		fprintf(fp, "\tsimd_i32 i;\n");
 		fprintf(fp, "\tneg = simd_f32(x < simd_f32(0));\n");
 		fprintf(fp, "\trng = simd_f32(x < simd_f32(%.9e));\n", double(xmax));
-		fprintf(fp, "\tx = min(fabs(x), simd_f32(%.9e));\n", double(xmax));
+		fprintf(fp, "\tx = fmin(fabs(x), simd_f32(%.9e));\n", double(xmax));
 		fprintf(fp, "\tq = x + simd_f32(1);\n");
-		fprintf(fp, "\tx = min(x, simd_f32(%.9e));\n", double(xmax));
+		fprintf(fp, "\tx = fmin(x, simd_f32(%.9e));\n", double(xmax));
 		fprintf(fp, "\tq *= q;\n");
 		fprintf(fp, "\ti = ((((simd_i32&) q) & simd_i32(0x7F800000)) >> int(23)) - simd_i32(127);\n");
 		fprintf(fp, "\ty = x * x ;\n");
@@ -1175,7 +1175,7 @@ void double_funcs(FILE* fp) {
 		fprintf(fp, "\tx2 = x * x;\n");
 		fprintf(fp, "\tl = x < simd_f64(0.4);\n");
 		fprintf(fp, "\tz = simd_f64(1) - simd_f64(l);\n");
-		fprintf(fp, "\tx = min(x, simd_f64(%.17e));\n", (double) xmax - 0.00001);
+		fprintf(fp, "\tx = fmin(x, simd_f64(%.17e));\n", (double) xmax - 0.00001);
 		fprintf(fp, "\ti0 = x * simd_f64(%.17e);\n", (double) (hiprec_real(M) / xmax));
 		fprintf(fp, "\ti0 += simd_i64(1);\n");
 		fprintf(fp, "\ti0 -= l;\n");
@@ -1508,7 +1508,7 @@ void double_funcs(FILE* fp) {
 				"\tsimd_i64 ic, nearroot, nearroot1, nearroot2, asym, neg, yneg;\n"
 				"\tsimd_f64_2 Y;\n"
 				"\tx0 = x;\n"
-				"\tic = simd_i64(min(simd_f64(2) * max(floor(-x - simd_f64(1)), simd_f64(0)), simd_f64(%i)));\n", NROOTS - 2);
+				"\tic = simd_i64(fmin(simd_f64(2) * fmax(floor(-x - simd_f64(1)), simd_f64(0)), simd_f64(%i)));\n", NROOTS - 2);
 		fprintf(fp, "\tnearroot1 = (x > c.gather(rootbegin, ic) && x < c.gather(rootend, ic));\n"
 				"\tnearroot2 = (x > c.gather(rootbegin, ic + simd_i64(1)) && x < c.gather(rootend, ic + simd_i64(1)));\n"
 				"\tnearroot = nearroot1 || nearroot2;\n"
@@ -1830,7 +1830,7 @@ void double_funcs(FILE* fp) {
 		fprintf(fp, "simd_f64 exp2(simd_f64 x) {\n");
 		fprintf(fp, "\tsimd_f64 x0, y;\n");
 		fprintf(fp, "\tsimd_i64 i;\n");
-		fprintf(fp, "\tx = max(simd_f64(-1000), min(simd_f64(1000), x));\n");
+		fprintf(fp, "\tx = fmax(simd_f64(-1000), fmin(simd_f64(1000), x));\n");
 		fprintf(fp, "\tx0 = round(x);\n");
 		fprintf(fp, "\tx -= x0;\n");
 		fprintf(fp, "\ty = simd_f64(%.20e);\n", (double) c0[N - 1]);
@@ -1948,9 +1948,9 @@ void double_funcs(FILE* fp) {
 		fprintf(fp, "\tsimd_i64 i;\n");
 		fprintf(fp, "\tneg = simd_f64(x < simd_f64(0));\n");
 		fprintf(fp, "\trng = simd_f64(x < simd_f64(%.17e));\n", double(xmax));
-		fprintf(fp, "\tx = min(fabs(x), simd_f64(%.17e));\n", double(xmax));
+		fprintf(fp, "\tx = fmin(fabs(x), simd_f64(%.17e));\n", double(xmax));
 		fprintf(fp, "\tq = x + simd_f64(1);\n");
-		fprintf(fp, "\tx = min(x, simd_f64(%.17e));\n", double(xmax));
+		fprintf(fp, "\tx = fmin(x, simd_f64(%.17e));\n", double(xmax));
 		fprintf(fp, "\tq *= q;\n");
 		fprintf(fp, "\tq *= q;\n");
 		fprintf(fp, "\ti = ((((simd_i64&) q) & simd_i64(0x7FF0000000000000)) >> (long long)(52)) - simd_i64(1023);\n");
