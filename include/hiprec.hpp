@@ -107,6 +107,9 @@ public:
 	bool operator>=(const hiprec_real& a) const {
 		return mpfr_cmp(q, a.q) >= 0;
 	}
+	bool operator>=(const int a) const {
+		return mpfr_cmp(q, hiprec_real(a).q) >= 0;
+	}
 	bool operator<=(const hiprec_real& a) const {
 		return mpfr_cmp(q, a.q) <= 0;
 	}

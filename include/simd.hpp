@@ -5,6 +5,8 @@
 #include <mutex>
 #include <cfenv>
 #include <cmath>
+#include <initializer_list>
+#include <cstdio>
 
 #ifdef NDEBUG
 #define CHECK_ALIGNMENT(ptr, sz)
