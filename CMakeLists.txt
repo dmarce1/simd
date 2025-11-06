@@ -24,7 +24,7 @@ execute_process(
 FILE(GLOB SRC_FILES ${CMAKE_CURRENT_BINARY_DIR}/generated_code/src/*.cpp)
 add_library(simd ${SRC_FILES} ${GENERATED_HEADER_FILES})
 target_include_directories(simd PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_BINARY_DIR}/generated_code/include)
-target_compile_options(simd PUBLIC -march=native)
+target_compile_options(simd PUBLIC -march=native -mavx2)
 set_target_properties(simd PROPERTIES PUBLIC_HEADER "include/simd.hpp")
 #add_compile_options(-g -fsanitize=address)
 #add_link_options(-fsanitize=address)
