@@ -1061,7 +1061,7 @@ simd::simd_f64 lgamma_test(simd::simd_f64 x) {
 	simd_i64 ic, nearroot, nearroot1, nearroot2, asym, neg, yneg;
 	simd_f64_2 Y;
 	x0 = x;
-	ic = simd_i64(min(simd_f64(2) * max(floor(-x - simd_f64(1)), simd_f64(0)), simd_f64(NROOTS - 2)));
+	ic = simd_i64(fmin(simd_f64(2) * fmax(floor(-x - simd_f64(1)), simd_f64(0)), simd_f64(NROOTS - 2)));
 	nearroot1 = (x > c.gather(rootbegin, ic) && x < c.gather(rootend, ic));
 	nearroot2 = (x > c.gather(rootbegin, ic + simd_i64(1)) && x < c.gather(rootend, ic + simd_i64(1)));
 	nearroot = nearroot1 || nearroot2;
@@ -1218,7 +1218,7 @@ int main() {
 		N++;
 	//	if (err > maxerr) {
 			maxerr = err;
-			printf("%e %e %e %e \n", x, b, a, err);
+		//	printf("%e %e %e %e \n", x, b, a, err);
 	//	}
 	}
 	avge /= N;
