@@ -2034,9 +2034,14 @@ void double_funcs(FILE* fp) {
  }*/
 
 int main() {
-	system("mkdir -p ./generated_code\n");
-	system("mkdir -p ./generated_code/src/\n");
-	FILE* fp = fopen("./generated_code/src/math.cpp", "wt");
+	/* The build system creates the output directory (cmake -E make_directory)
+	   before running the generator. */
+	const char* const out_path = "./generated_code/src/math.cpp";
+	FILE* fp = fopen(out_path, "wt");
+	if (!fp) {
+		fprintf(stderr, "Unable to open %s for writing\n", out_path);
+		return 1;
+	}
 	fprintf(fp, "#include \"simd.hpp\"\n");
 	fprintf(fp, "#include <utility>\n");
 	fprintf(fp, "\nnamespace simd {\n\n");
