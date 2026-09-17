@@ -28,6 +28,13 @@ hiprec_real factorial(int n) {
 	}
 }
 
+/* Inputs are resolved relative to SIMD_ROOT_DIR, which CMake sets to this
+   project's source directory. The default preserves the standalone build,
+   where the codegen runs from a build directory one level below the root. */
+#ifndef SIMD_ROOT_DIR
+#define SIMD_ROOT_DIR ".."
+#endif
+
 void include(FILE* fp, std::string filename) {
 	constexpr int N = 1024;
 	char buffer[N];
@@ -220,7 +227,7 @@ std::vector<double> gammainv_coeffs(int N, hiprec_real x) {
 }
 
 void float_funcs(FILE* fp) {
-	include(fp, "../include/code.hpp");
+	include(fp, std::string(SIMD_ROOT_DIR) + "/include/code.hpp");
 
 	/* cos */
 	{
@@ -1105,7 +1112,7 @@ void float_funcs(FILE* fp) {
 
 }
 void double_funcs(FILE* fp) {
-	include(fp, "../include/code64.hpp");
+	include(fp, std::string(SIMD_ROOT_DIR) + "/include/code64.hpp");
 
 	/* erf */
 	{

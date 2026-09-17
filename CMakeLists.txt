@@ -14,12 +14,24 @@ execute_process(
 )	
 
 execute_process(
-	COMMAND ${CMAKE_CXX_COMPILER} -g -O3 ${CMAKE_CURRENT_SOURCE_DIR}/src/codegen.cpp -pthread -lmpfr -lgmp -o codegen
+	COMMAND ${CMAKE_CXX_COMPILER} -g -O3 ${CMAKE_CURRENT_SOURCE_DIR}/src/codegen.cpp
+	        "-DSIMD_ROOT_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}\""
+	        -pthread -lmpfr -lgmp -o codegen
   	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+	RESULT_VARIABLE SIMD_CODEGEN_BUILD_RESULT
 )
+if(NOT SIMD_CODEGEN_BUILD_RESULT EQUAL 0)
+	message(FATAL_ERROR "Failed to compile the SIMD code generator")
+endif()
+
 execute_process(
   	COMMAND ${CMAKE_CURRENT_BINARY_DIR}/codegen
+	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+	RESULT_VARIABLE SIMD_CODEGEN_RUN_RESULT
 )
+if(NOT SIMD_CODEGEN_RUN_RESULT EQUAL 0)
+	message(FATAL_ERROR "The SIMD code generator failed: ${SIMD_CODEGEN_RUN_RESULT}")
+endif()
 
 FILE(GLOB SRC_FILES ${CMAKE_CURRENT_BINARY_DIR}/generated_code/src/*.cpp)
 add_library(simd ${SRC_FILES} ${GENERATED_HEADER_FILES})
