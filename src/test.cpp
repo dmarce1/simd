@@ -1,5 +1,6 @@
 #include "simd.hpp"
 #include <stdio.h>
+#include <stdlib.h>
 
 #include <immintrin.h>
 #include <limits>
@@ -138,9 +139,14 @@ float epserr(float x0, float y0) {
 	return fabsf(err);
 }
 
+/* Number of vector-width samples per accuracy/speed test: N = 1 << N_bit_shift.
+   Each test allocates buffers proportional to N, so lowering this lowers the
+   memory footprint and the runtime. */
+constexpr int N_bit_shift = 21;
+
 template<class T, class V, class F1, class F2>
 test_result_t test_function(const F1& ref, const F2& test, T a, T b, bool relerr) {
-	constexpr int N = 1 << 23;
+	constexpr int N = 1 << N_bit_shift;
 	constexpr int size = V::size();
 	static T* xref;
 	static V* xtest;
@@ -215,12 +221,24 @@ test_result_t test_function(const F1& ref, const F2& test, T a, T b, bool relerr
 	result.speed = speed;
 	result.max_err = max_err / std::numeric_limits<T>::epsilon();
 	result.avg_err = err / std::numeric_limits<T>::epsilon();
+	/* Every TEST macro expansion instantiates this template afresh, because the
+	   lambdas give each call site its own closure types -- so these statics are
+	   per-test, not shared. Release them here; otherwise ~1 GiB of buffers
+	   accumulates per test until the process is OOM-killed. */
+	free(xref);
+	free(xtest);
+	free(yref);
+	free(ytest);
+	xref = nullptr;
+	xtest = nullptr;
+	yref = nullptr;
+	ytest = nullptr;
 	return result;
 }
 
 template<class T, class V, class F1, class F2>
 test_result_t test_function(const F1& ref, const F2& test, T a0, T b0, T a1, T b1, bool relerr) {
-	constexpr int N = 1 << 23;
+	constexpr int N = 1 << N_bit_shift;
 	constexpr int size = V::size();
 	static T* xref;
 	static V* xtest;
@@ -299,6 +317,19 @@ test_result_t test_function(const F1& ref, const F2& test, T a0, T b0, T a1, T b
 	result.speed = speed;
 	result.max_err = max_err / std::numeric_limits<T>::epsilon();
 	result.avg_err = err / std::numeric_limits<T>::epsilon();
+	/* Per-instantiation statics; see the single-argument overload above. */
+	free(xref);
+	free(xtest);
+	free(yref);
+	free(ytest);
+	free(zref);
+	free(ztest);
+	xref = nullptr;
+	xtest = nullptr;
+	yref = nullptr;
+	ytest = nullptr;
+	zref = nullptr;
+	ztest = nullptr;
 	return result;
 }
 
@@ -1195,35 +1226,8 @@ int main() {
 	using namespace simd;
 //	gammainv_coeffs(20, 16.0);
 //return 0;
-	srand (time(NULL));double
-	s, c;
-	double maxe = 0.0;
-	double avge = 0.0;
-	int N = 0;
-	double eps = std::numeric_limits<float>::epsilon();
-	double xmin = 100.00000;
-	double xmax = 168.0;
-	int Na = 100;
-	int i = 0;
-	int maxerr = 0;
-//	while (true) {
-	for (float x = -33; x < 33; x += rand1() * 0.001) {
-		//float x = rand1() * 66 - 33;
-		float a, b, err;
-		a = tgammal(x);
-		b = tgamma(simd_f32(x))[0];
-		err = epserr(a, b) / eps;
-		maxe = std::max(maxe,(double) err);
-		avge += err;
-		N++;
-	//	if (err > maxerr) {
-			maxerr = err;
-		//	printf("%e %e %e %e \n", x, b, a, err);
-	//	}
-	}
-	avge /= N;
-	printf("%e %e \n", maxe, avge);
-	TEST1(float, simd_f32, tgamma, tgamma, tgamma, -33, 33.000, true);
+	srand(time(NULL));
+//	TEST1(float, simd_f32, tgamma, tgamma, tgamma, -33, 33.000, true);
 //	TEST2(float, simd_f32, pow, powf, pow, 1e-3, 1e3, .01, 10, true);
 //TEST1(double, simd_f64, log2, log2, log2_precise, .0001, 100000, true);
 //	TEST1(double, simd_f64, exp, exp, exp, -600.0, 600.0, true);
@@ -1232,54 +1236,54 @@ int main() {
 
 //	TEST2(float, simd_f32, pow, pow, pow, .1, 10, -30, 30, true);
 
-	printf("Testing SIMD Functions\n");
+	printf("Testing SIMD Functions with N = 1 << %d = %d\n", N_bit_shift, 1 << N_bit_shift);
 	printf("\nSingle Precision\n");
 	printf("name   speed        avg err      max err\n");
 
-	/*TEST1(float, simd_f32, asin, asinf, asin, -1, 1, true);
-	 TEST1(float, simd_f32, acos, acosf, acos, -1, 1, true);
-	 TEST1(float, simd_f32, atan, atanf, atan, -10.0, 10.0, true);
-	 TEST1(float, simd_f32, acosh, acoshf, acosh, 1.001, 10.0, true);
-	 TEST1(float, simd_f32, asinh, asinhf, asinh, .001, 10, true);
-	 TEST1(float, simd_f32, atanh, atanhf, atanh, 0.001, 0.999, true);
-	 TEST1(float, simd_f32, exp, expf, exp, -86.0, 86.0, true);
-	 TEST1(float, simd_f32, exp2, exp2f, exp2, -125.0, 125.0, true);
-	 TEST1(float, simd_f32, expm1, expm1f, expm1, -2.0, 2.0, true);
-	 TEST1(float, simd_f32, log, logf, log, exp(-1), exp(40), true);
-	 TEST1(float, simd_f32, log2, log2f, log2, 0.00001, 100000, true);
-	 TEST1(float, simd_f32, log1p, log1pf, log1p, exp(-3), exp(3), true);
-	 TEST1(float, simd_f32, erf, erff, erf, -7, 7, true);
-	 TEST1(float, simd_f32, erfc, erfcf, erfc, -8.9, 8.9, true);
-	 TEST1(float, simd_f32, tgamma, tgammaf, tgamma, -33, 33.0, true);
-	 TEST1(float, simd_f32, cosh, coshf, cosh, -10.0, 10.0, true);
-	 TEST1(float, simd_f32, sinh, sinhf, sinh, -10.0, 10.0, true);
-	 TEST1(float, simd_f32, tanh, tanhf, tanh, -10.0, 10.0, true);
-	 TEST1(float, simd_f32, sin, sinf, sin, -2 * M_PI, 2 * M_PI, true);
-	 TEST1(float, simd_f32, cos, cosf, cos, -2 * M_PI, 2 * M_PI, true);
-	 TEST1(float, simd_f32, tan, tanf, tan, -2 * M_PI, 2 * M_PI, true);
-	 printf("\nDouble Precision\n");
-	 printf("name   speed        avg err      max err\n");
-	 TEST1(double, simd_f64, asin, asin, asin, -1, 1, true);
-	 TEST1(double, simd_f64, acos, acos, acos, -1 + 1e-6, 1 - 1e-6, true);
-	 TEST1(double, simd_f64, atan, atan, atan, -10.0, 10.0, true);
-	 TEST1(double, simd_f64, acosh, acosh, acosh, 1.001, 10.0, true);
-	 TEST1(double, simd_f64, asinh, asinh, asinh, .001, 10, true);
-	 TEST1(double, simd_f64, atanh, atanh, atanh, 0.001, 0.999, true);
-	 TEST2(double, simd_f64, pow, pow, pow, .1, 10, -300, 300, true);
-	 TEST1(double, simd_f64, exp, exp, exp, -600.0, 600.0, true);
-	 TEST1(double, simd_f64, exp2, exp2, exp2, -1000.0, 1000.0, true);
-	 TEST1(double, simd_f64, expm1, expm1, expm1, -2.0, 2.0, true);
-	 TEST1(double, simd_f64, log, log, log, exp(-1), exp(40), true);
-	 TEST1(double, simd_f64, log2, log2, log2, .0001, 100000, true);
-	 TEST1(double, simd_f64, log1p, log1p, log1p, exp(-3), exp(3), true);
-	 TEST1(double, simd_f64, erf, erf, erf, -9, 9, true);
-	 TEST1(double, simd_f64, erfc, erfc, erfc, -25.0, 25.0, true);
-	 TEST1(double, simd_f64, cosh, cosh, cosh, -10.0, 10.0, true);
-	 TEST1(double, simd_f64, sinh, sinh, sinh, -10.0, 10.0, true);
-	 TEST1(double, simd_f64, tanh, tanh, tanh, -10.0, 10.0, true);
-	 TEST1(double, simd_f64, sin, sin, sin, -2.0 * M_PI, 2.0 * M_PI, true);
-	 TEST1(double, simd_f64, cos, cos, cos, -2.0 * M_PI, 2.0 * M_PI, true);
-	 TEST1(double, simd_f64, tan, tan, tan, -2.0 * M_PI, 2.0 * M_PI, true);*/
+	TEST1(float, simd_f32, asin, asinf, asin, -1, 1, true);
+	TEST1(float, simd_f32, acos, acosf, acos, -1, 1, true);
+	TEST1(float, simd_f32, atan, atanf, atan, -10.0, 10.0, true);
+	TEST1(float, simd_f32, acosh, acoshf, acosh, 1.001, 10.0, true);
+	TEST1(float, simd_f32, asinh, asinhf, asinh, .001, 10, true);
+	TEST1(float, simd_f32, atanh, atanhf, atanh, 0.001, 0.999, true);
+	TEST1(float, simd_f32, exp, expf, exp, -86.0, 86.0, true);
+	TEST1(float, simd_f32, exp2, exp2f, exp2, -125.0, 125.0, true);
+	TEST1(float, simd_f32, expm1, expm1f, expm1, -2.0, 2.0, true);
+	TEST1(float, simd_f32, log, logf, log, exp(-1), exp(40), true);
+	TEST1(float, simd_f32, log2, log2f, log2, 0.00001, 100000, true);
+	TEST1(float, simd_f32, log1p, log1pf, log1p, exp(-3), exp(3), true);
+	TEST1(float, simd_f32, erf, erff, erf, -7, 7, true);
+	TEST1(float, simd_f32, erfc, erfcf, erfc, -8.9, 8.9, true);
+	TEST1(float, simd_f32, tgamma, tgammaf, tgamma, -33, 33.0, true);
+	TEST1(float, simd_f32, cosh, coshf, cosh, -10.0, 10.0, true);
+	TEST1(float, simd_f32, sinh, sinhf, sinh, -10.0, 10.0, true);
+	TEST1(float, simd_f32, tanh, tanhf, tanh, -10.0, 10.0, true);
+	TEST1(float, simd_f32, sin, sinf, sin, -2 * M_PI, 2 * M_PI, true);
+	TEST1(float, simd_f32, cos, cosf, cos, -2 * M_PI, 2 * M_PI, true);
+	TEST1(float, simd_f32, tan, tanf, tan, -2 * M_PI, 2 * M_PI, true);
+	printf("\nDouble Precision\n");
+	printf("name   speed        avg err      max err\n");
+	TEST1(double, simd_f64, asin, asin, asin, -1, 1, true);
+	TEST1(double, simd_f64, acos, acos, acos, -1 + 1e-6, 1 - 1e-6, true);
+	TEST1(double, simd_f64, atan, atan, atan, -10.0, 10.0, true);
+	TEST1(double, simd_f64, acosh, acosh, acosh, 1.001, 10.0, true);
+	TEST1(double, simd_f64, asinh, asinh, asinh, .001, 10, true);
+	TEST1(double, simd_f64, atanh, atanh, atanh, 0.001, 0.999, true);
+	TEST2(double, simd_f64, pow, pow, pow, .1, 10, -300, 300, true);
+	TEST1(double, simd_f64, exp, exp, exp, -600.0, 600.0, true);
+	TEST1(double, simd_f64, exp2, exp2, exp2, -1000.0, 1000.0, true);
+	TEST1(double, simd_f64, expm1, expm1, expm1, -2.0, 2.0, true);
+	TEST1(double, simd_f64, log, log, log, exp(-1), exp(40), true);
+	TEST1(double, simd_f64, log2, log2, log2, .0001, 100000, true);
+	TEST1(double, simd_f64, log1p, log1p, log1p, exp(-3), exp(3), true);
+	TEST1(double, simd_f64, erf, erf, erf, -9, 9, true);
+	TEST1(double, simd_f64, erfc, erfc, erfc, -25.0, 25.0, true);
+	TEST1(double, simd_f64, cosh, cosh, cosh, -10.0, 10.0, true);
+	TEST1(double, simd_f64, sinh, sinh, sinh, -10.0, 10.0, true);
+	TEST1(double, simd_f64, tanh, tanh, tanh, -10.0, 10.0, true);
+	TEST1(double, simd_f64, sin, sin, sin, -2.0 * M_PI, 2.0 * M_PI, true);
+	TEST1(double, simd_f64, cos, cos, cos, -2.0 * M_PI, 2.0 * M_PI, true);
+	TEST1(double, simd_f64, tan, tan, tan, -2.0 * M_PI, 2.0 * M_PI, true);
 
 	/*
 
