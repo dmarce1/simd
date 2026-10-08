@@ -5,14 +5,14 @@
 #include "../include/hiprec.hpp"
 #include "../include/polynomial.hpp"
 
-#define SYSTEM(...) if( system(__VA_ARGS__) != 0 ) {printf( "SYSTEM error %s %i\n", __FILE__, __LINE__); abort(); }
+#define SYSTEM(...) if( system(__VA_ARGS__) != 0 ) {fprintf(stderr, "SYSTEM error %s %i\n", __FILE__, __LINE__); abort(); }
 
 template<class ...Args>
 std::string print2str(const char* fstr, Args&&...args) {
 	std::string result;
 	char* str;
 	if (!asprintf(&str, fstr, std::forward<Args>(args)...)) {
-		printf("Error in %s on line %i\n", __FILE__, __LINE__);
+		fprintf(stderr, "Error in %s on line %i\n", __FILE__, __LINE__);
 		abort();
 	}
 	result = str;
@@ -40,7 +40,7 @@ void include(FILE* fp, std::string filename) {
 	char buffer[N];
 	FILE* fp0 = fopen(filename.c_str(), "rt");
 	if (!fp0) {
-		printf("Unable to open %s\n", filename.c_str());
+		fprintf(stderr, "Unable to open %s\n", filename.c_str());
 		abort();
 	}
 	while (!feof(fp0)) {
@@ -329,7 +329,6 @@ void float_funcs(FILE* fp) {
 					const double factor = (double) (pow(hiprec_real(2) * hiprec_real(M) / xmax, hiprec_real(i)));
 //					c1 *= factor;// * ((1<<(i)) * 0.5);
 					//	c1 *= 2.0;
-					printf("%e\n", c1);
 					c2 *= factor;
 					c3 *= factor;
 					c4 *= factor;
@@ -522,7 +521,6 @@ void float_funcs(FILE* fp) {
 				} else if (n == 1) {
 					xrt = 1.0;
 				}
-				printf("%.16e\n", xrt);
 				Xc[n + NCHEBY] = xrt;
 				float x1 = round(x0);
 				auto co = gammainv_coeffs(M, xrt);
@@ -562,11 +560,7 @@ void float_funcs(FILE* fp) {
 						rootend[n] = rootbegin[n - 1] = avg;
 					}
 				}
-				printf("%i %e %e\n", n, rootbegin[n], rootend[n]);
 				n++;
-			}
-			for (int n = 0; n < NROOTS; n++) {
-				printf("%i %e %e\n", n, rootbegin[n], rootend[n]);
 			}
 			std::function<hiprec_real(hiprec_real)> func = [](hiprec_real x) {
 				const auto sum = 0;
@@ -1342,7 +1336,6 @@ void double_funcs(FILE* fp) {
 				} else if (n == 1) {
 					xrt = 1.0;
 				}
-				printf("%.16e\n", xrt);
 				Xc[n + NCHEBY] = xrt;
 				double x1 = round(x0);
 				auto co = gammainv_coeffs(M, xrt);
@@ -1382,11 +1375,7 @@ void double_funcs(FILE* fp) {
 						rootend[n] = rootbegin[n - 1] = avg;
 					}
 				}
-				printf("%i %e %e\n", n, rootbegin[n], rootend[n]);
 				n++;
-			}
-			for (int n = 0; n < NROOTS; n++) {
-				printf("%i %e %e\n", n, rootbegin[n], rootend[n]);
 			}
 			std::function<hiprec_real(hiprec_real)> func = [](hiprec_real x) {
 				const auto sum = 0;
@@ -2045,9 +2034,14 @@ void double_funcs(FILE* fp) {
  }*/
 
 int main() {
-	system("mkdir -p ./generated_code\n");
-	system("mkdir -p ./generated_code/src/\n");
-	FILE* fp = fopen("./generated_code/src/math.cpp", "wt");
+	/* The build system creates the output directory (cmake -E make_directory)
+	   before running the generator. */
+	const char* const out_path = "./generated_code/src/math.cpp";
+	FILE* fp = fopen(out_path, "wt");
+	if (!fp) {
+		fprintf(stderr, "Unable to open %s for writing\n", out_path);
+		return 1;
+	}
 	fprintf(fp, "#include \"simd.hpp\"\n");
 	fprintf(fp, "#include <utility>\n");
 	fprintf(fp, "\nnamespace simd {\n\n");
